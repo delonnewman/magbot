@@ -1,0 +1,196 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+binmode STDOUT, ":utf8";
+
+package Parser;
+
+sub new {
+	my $class   = shift;
+	my $content = shift;
+
+	my $obj = bless {
+		content => $content,
+	}, $class;
+
+	$obj->parse;
+
+	$obj;
+}
+
+sub content { shift->{content} }
+
+package Feed;
+use base qw(Parser);
+
+sub channel { shift->{channel} }
+sub title   { shift->{title} }
+sub image   { shift->{image} }
+
+sub items {
+	my $self    = shift;
+	my $content = shift;
+
+	if ( $content ) {
+		$self->{items} = [
+			map  { Item->new($_) }
+				grep { !/^\n\n\s+/ }
+					map { s/^\s+<item>\s+//; $_ }
+						split /<\/item>/, $content
+		];
+	} else {
+		if ( $self->{items} ) {
+			wantarray ? @{ $self->{items} } : $self->{items};
+		} else {
+			wantarray ? () : [];
+		}
+	}
+}
+
+sub parse {
+	my $self = shift;
+	local $_ = $self->content;
+	
+	/<channel>(.*)<\/channel>/s;
+	my $channel = $1;
+
+	/<title>(.*)<\/title>/;
+	$self->{title} = $1;
+
+	/<image>\s+<url>(.*)<\/url>/s;
+	$self->{image} = $1;
+
+	s/\s+<title>.*<\/itunes:block>//sg;
+	$self->items($_);
+}
+
+package Item;
+use base qw(Parser);
+use File::Basename;
+
+my %tokens = (
+	title   => 'title',
+	link    => 'link',
+	pubDate => 'date'
+);
+
+sub title { shift->{title} }
+sub link  { shift->{link} }
+sub date  { shift->{date} }
+
+sub file  {
+	my $self = shift;
+	$self->{file} //= basename $self->link;
+
+	$self->{file};
+}
+
+sub parse {
+	my $self   = shift;
+	local $_   = $self->content;
+
+	for my $token (keys %tokens) {
+		/<$token>(.*)<\/$token>/s;
+		$self->{$tokens{$token}} = $1;
+	}
+}
+
+package main;
+use HTTP::Tiny;
+use File::Basename;
+
+BEGIN {
+	my $droid;
+	sub notify {
+		eval {
+			require Android;
+			Android->import;
+			$droid //= Android->new;
+			$droid->notify('magbot', @_);
+		};
+
+		print $_[0] if $@;
+	}
+}
+
+sub path { join '/', @_ }
+sub get { HTTP::Tiny->new->get(@_)->{content} }
+
+sub getstore {
+	my $url  = shift;
+	my $file = shift;
+
+	my $content = get $url;
+	open FILE, '>', $file or die "cannot open $file";
+	print FILE $file;
+	close FILE;
+}
+
+my $dir = path dirname(__FILE__), '..', 'magbot';
+
+my @urls = qw(
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
+);
+
+sub get_contents {
+	my @feeds    = @_;
+	my @contents = map { get $_ } @feeds;
+
+	wantarray ? @contents : \@contents;
+}
+
+sub download_feeds {
+	my $dir  = shift;
+	my @feeds = @_;
+
+	mkdir $dir unless -e $dir;
+	
+	for my $feed (@feeds) {
+		print "\n==> Processing ", $feed->title, " ...\n";
+		my $feed_dir = path $dir, $feed->title;
+		mkdir $feed_dir unless -e $feed_dir;
+
+		for my $item ($feed->items) {
+			my $issue_dir = path $feed_dir, $item->date;
+			my $path      = path $issue_dir, $item->file;
+
+			mkdir $issue_dir unless -e $issue_dir;
+
+			if ( -e $path ) {
+				print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
+			} else {
+				print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
+
+				getstore $item->link, $path unless -e $path;
+				print "  ok.\n\n";
+			}
+		}
+	}
+}
+
+notify "Downloading mags to $dir...";
+download_feeds $dir, map { Feed->new($_) } get_contents @urls;
+notify "DONE.";
+
+__END__
+
+=head1 NAME
+
+magbot - For fetching media from feeds on jw.org
+
+=head1 SYNOPSIS
+
+For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
+
+or via command line like so.
+
+	> magbot
+
+=head1 AUTHOR
+
+Delon Newman <delon.newman@gmail.com>
+
+=cut

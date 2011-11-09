@@ -1,0 +1,14 @@
+NAME
+    magbot - For fetching media from feeds on jw.org
+
+SYNOPSIS
+    For use on Android devices via SL4A (see
+    http://code.google.com/p/android-scripting/)
+
+    or via command line like so.
+
+            > magbot
+
+AUTHOR
+    Delon Newman <delon.newman@gmail.com>
+
