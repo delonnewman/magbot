@@ -52,7 +52,7 @@ sub parse {
 	my $self = shift;
 	local $_ = $self->content;
 	
-	/<channel>(.*)<\/channel>/s;
+	/<channel>(.*)<\/channel>/gs;
 	my $channel = $1;
 
 	/<title>(.*)<\/title>/;
@@ -81,7 +81,7 @@ sub date  { shift->{date} }
 
 sub file  {
 	my $self = shift;
-	$self->{file} //= basename $self->link;
+	$self->{file} //= basename $self->link if $self->link;
 
 	$self->{file};
 }
@@ -97,56 +97,77 @@ sub parse {
 }
 
 package main;
-use HTTP::Tiny;
 use File::Basename;
 
 BEGIN {
+	#
+	# Try loading Android (from SL4A), then create notify
+	# function which sends a notification message on Android
+	# or prints to STDOUT anywhere else
+	#
 	my $droid;
-	sub notify {
-		eval {
-			require Android;
-			Android->import;
-			$droid //= Android->new;
-			$droid->notify('magbot', @_);
-		};
+	eval {
+		require Android;
+		Android->import;
+		$droid //= Android->new;
+	};
 
-		print $_[0] if $@;
+	sub notify {
+		if ( $droid ) { $droid->notify('magbot', @_) }
+		else          { print "$_[0]\n" }
+	}
+
+	#
+	# Try loading LWP::Simple, otherwise use HTTP::Tiny
+	# to create work alikes for 'get' and 'getstore'
+	#
+	eval {
+		require LWP::Simple;
+		LWP::Simple->import;
+	};
+	if ( $@ ) {
+		require HTTP::Tiny;
+		HTTP::Tiny->import;
+	
+		no strict 'subs';
+		
+		*get = sub { HTTP::Tiny->new->get(@_)->{content} };
+	
+		*getstore = sub {
+			my $url  = shift;
+			my $file = shift;
+		
+			my $content = get $url;
+			open FILE, '>', $file or die "cannot open $file";
+			print FILE $file;
+			close FILE;
+		};
+	
+		use strict 'subs';
+	}
+
+	# Was an alias for File::Spec but SL4A doesn't include it :-(
+	sub path {
+		for ( @_ ) { return "" unless defined $_ }
+		join '/', @_
 	}
 }
 
-sub path { join '/', @_ }
-sub get { HTTP::Tiny->new->get(@_)->{content} }
-
-sub getstore {
-	my $url  = shift;
-	my $file = shift;
-
-	my $content = get $url;
-	open FILE, '>', $file or die "cannot open $file";
-	print FILE $file;
-	close FILE;
-}
-
-my $dir = path dirname(__FILE__), '..', 'magbot';
-
-my @urls = qw(
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
-);
-
-sub get_contents {
-	my @feeds    = @_;
-	my @contents = map { get $_ } @feeds;
+sub download_feeds {
+	my @urls     = @_;
+	my @contents = map { get $_ } @urls;
 
 	wantarray ? @contents : \@contents;
 }
 
-sub download_feeds {
+
+sub download_media {
 	my $dir  = shift;
-	my @feeds = @_;
+	my @urls = @_;
 
 	mkdir $dir unless -e $dir;
+
+	my @feeds = map { Feed->new($_) } download_feeds @urls;
 	
 	for my $feed (@feeds) {
 		print "\n==> Processing ", $feed->title, " ...\n";
@@ -161,6 +182,8 @@ sub download_feeds {
 
 			if ( -e $path ) {
 				print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
+			} elsif ( !$item->link ) {
+				; # skip
 			} else {
 				print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
 
@@ -171,8 +194,19 @@ sub download_feeds {
 	}
 }
 
-notify "Downloading mags to $dir...";
-download_feeds $dir, map { Feed->new($_) } get_contents @urls;
+# Settings
+my $dir = path $ENV{'HOME'}, 'Podcasts';
+
+my @urls = qw(
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
+	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
+	http://leo.am/podcasts/floss
+);
+
+# Now to the main event!!
+notify "Downloading podcasts to $dir...";
+download_media $dir, @urls;
 notify "DONE.";
 
 __END__
