@@ -1,5 +1,5 @@
 NAME
-    magbot - For fetching media from feeds on jw.org
+    mbot - For fetching media from podcast feeds
 
 SYNOPSIS
     For use on Android devices via SL4A (see
@@ -7,7 +7,7 @@ SYNOPSIS
 
     or via command line like so.
 
-            > magbot
+            > mbot
 
 AUTHOR
     Delon Newman <delon.newman@gmail.com>

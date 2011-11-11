@@ -213,7 +213,7 @@ __END__
 
 =head1 NAME
 
-magbot - For fetching media from feeds on jw.org
+mbot - For fetching media from podcast feeds
 
 =head1 SYNOPSIS
 
@@ -221,7 +221,7 @@ For use on Android devices via SL4A (see http://code.google.com/p/android-script
 
 or via command line like so.
 
-	> magbot
+	> mbot
 
 =head1 AUTHOR
 
