@@ -34,10 +34,10 @@ sub items {
 
 	if ( $content ) {
 		$self->{items} = [
-			map  { Item->new($_) }
-				grep { !/^\n\n\s+/ }
-					map { s/^\s+<item>\s+//; $_ }
-						split /<\/item>/, $content
+			map   { Item->new($_) }
+			grep  { !/^\n\n\s+/ }
+			map   { s/^\s+<item>\s+//; $_ }
+			split /<\/item>/, $content
 		];
 	} else {
 		if ( $self->{items} ) {
