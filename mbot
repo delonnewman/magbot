@@ -153,6 +153,7 @@ BEGIN {
 	}
 }
 
+
 sub download_feeds {
 	my @urls     = @_;
 	my @contents = map { get $_ } @urls;
@@ -197,16 +198,9 @@ sub download_media {
 # Settings
 my $dir = path $ENV{'HOME'}, 'Podcasts';
 
-my @urls = qw(
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
-	http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
-	http://leo.am/podcasts/floss
-);
-
 # Now to the main event!!
 notify "Downloading podcasts to $dir...";
-download_media $dir, @urls;
+download_media $dir, <DATA>;
 notify "DONE.";
 
 __END__
@@ -228,3 +222,10 @@ or via command line like so.
 Delon Newman <delon.newman@gmail.com>
 
 =cut
+
+__DATA__
+http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=g&rfm=epub
+http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
+http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
+http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
+http://leo.am/podcasts/floss
