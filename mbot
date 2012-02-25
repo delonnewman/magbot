@@ -24,6 +24,8 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
+my $DIR = "$ENV{HOME}/Podcasts";
+
 package Parser;
 
 sub new {
@@ -48,13 +50,18 @@ sub channel { shift->{channel} }
 sub title   { shift->{title} }
 sub image   { shift->{image} }
 
+sub dir {
+	my $self = shift;
+	$DIR . '/' . $self->title;
+}
+
 sub items {
 	my $self    = shift;
 	my $content = shift;
 
 	if ( $content ) {
 		$self->{items} = [
-			map   { Item->new($_) }
+			map   { Item->new($_, $self) }
 			grep  { !/^\n\n\s+/ }
 			map   { s/^\s+<item>\s+//; $_ }
 			split /<\/item>/, $content
@@ -95,9 +102,30 @@ my %tokens = (
 	pubDate => 'date'
 );
 
+sub new {
+	my ($class, $content, $feed) = @_;
+	
+	my $self = $class->SUPER::new($content);
+
+	$self->{feed} = $feed;
+
+	bless $self, $class;
+}
+
 sub title { shift->{title} }
 sub link  { shift->{link} }
 sub date  { shift->{date} }
+sub feed  { shift->{feed} }
+
+sub issue_dir {
+	my $self = shift;
+	$self->feed->dir . '/' . $self->date;
+}
+
+sub dir {
+	my $self = shift;
+	$self->issue_dir . '/' . $self->file;
+}
 
 sub file  {
 	my $self = shift;
@@ -134,7 +162,7 @@ BEGIN {
 
 	sub notify {
 		if ( $droid ) { $droid->notify('magbot', @_) }
-		else          { print "$_[0]\n" }
+		else          { print @_, "\n" }
 	}
 
 	#
@@ -173,7 +201,6 @@ BEGIN {
 	}
 }
 
-
 sub download_feeds {
 	my @urls     = @_;
 	my @contents = map { get $_ } @urls;
@@ -181,6 +208,11 @@ sub download_feeds {
 	wantarray ? @contents : \@contents;
 }
 
+sub find_new {
+	map  {  $_->[1] }
+	grep { !$_->[0] }
+	map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
+}
 
 sub download_media {
 	my $dir  = shift;
@@ -188,41 +220,42 @@ sub download_media {
 
 	mkdir $dir unless -e $dir;
 
-	my @feeds = map { Feed->new($_) } download_feeds @urls;
+	notify "Downloading feeds and checking for new items...";
+
+	my @items = find_new map { Feed->new($_) } download_feeds @urls;
+	if ( int(@items) == 0 ) {
+		notify "There's nothing new in your feeds.";
+		exit;
+	}
+
+	notify "Downloading ", int(@items), " podcasts to $dir...\n";
 	
-	for my $feed (@feeds) {
-		print "\n==> Processing ", $feed->title, " ...\n";
-		my $feed_dir = path $dir, $feed->title;
+	for my $item (@items) {
+		my $feed_dir = $item->feed->dir;
 		mkdir $feed_dir unless -e $feed_dir;
 
-		for my $item ($feed->items) {
-			my $issue_dir = path $feed_dir, $item->date;
-			my $path      = path $issue_dir, $item->file;
+		my $issue_dir = $item->issue_dir;
+		my $path      = $item->dir;
 
-			mkdir $issue_dir unless -e $issue_dir;
+		mkdir $issue_dir unless -e $issue_dir;
 
-			if ( -e $path ) {
-				print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
-			} elsif ( !$item->link ) {
-				; # skip
-			} else {
-				print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
+		if ( -e $path ) {
+			print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
+		} elsif ( !$item->link ) {
+			; # skip
+		} else {
+			print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
 
-				getstore $item->link, $path unless -e $path;
-				print "  ok.\n\n";
-			}
+			getstore $item->link, $path unless -e $path;
+			print "  ok.\n\n";
 		}
 	}
+	
+	notify "DONE.";
 }
 
-# Settings
-my $dir  = path $ENV{'HOME'}, 'Podcasts';
-my @urls = <DATA>;
-
 # Now to the main event!!
-notify "Downloading podcasts to $dir...";
-download_media $dir, @urls;
-notify "DONE.";
+download_media $DIR, <DATA>;
 
 __DATA__
 http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=g&rfm=epub
