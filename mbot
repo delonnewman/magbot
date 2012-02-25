@@ -4,6 +4,26 @@ use warnings;
 
 binmode STDOUT, ":utf8";
 
+=pod
+
+=head1 NAME
+
+mbot - For fetching media from podcast feeds
+
+=head1 SYNOPSIS
+
+For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
+
+or via command line like so.
+
+	> mbot
+
+=head1 AUTHOR
+
+Delon Newman <delon.newman@gmail.com>
+
+=cut
+
 package Parser;
 
 sub new {
@@ -196,36 +216,18 @@ sub download_media {
 }
 
 # Settings
-my $dir = path $ENV{'HOME'}, 'Podcasts';
+my $dir  = path $ENV{'HOME'}, 'Podcasts';
+my @urls = <DATA>;
 
 # Now to the main event!!
 notify "Downloading podcasts to $dir...";
-download_media $dir, <DATA>;
+download_media $dir, @urls;
 notify "DONE.";
-
-__END__
-
-=head1 NAME
-
-mbot - For fetching media from podcast feeds
-
-=head1 SYNOPSIS
-
-For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
-
-or via command line like so.
-
-	> mbot
-
-=head1 AUTHOR
-
-Delon Newman <delon.newman@gmail.com>
-
-=cut
 
 __DATA__
 http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=g&rfm=epub
+http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=w&rfm=epub
+http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=wp&rfm=epub
 http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
 http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
 http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
-http://leo.am/podcasts/floss
