@@ -16,7 +16,7 @@ For use on Android devices via SL4A (see http://code.google.com/p/android-script
 
 or via command line like so.
 
-	> mbot
+    > mbot
 
 =head1 AUTHOR
 
@@ -29,16 +29,16 @@ my $DIR = "$ENV{HOME}/Podcasts";
 package Parser;
 
 sub new {
-	my $class   = shift;
-	my $content = shift;
+    my $class   = shift;
+    my $content = shift;
 
-	my $obj = bless {
-		content => $content,
-	}, $class;
+    my $obj = bless {
+        content => $content,
+    }, $class;
 
-	$obj->parse;
+    $obj->parse;
 
-	$obj;
+    $obj;
 }
 
 sub content { shift->{content} }
@@ -51,45 +51,45 @@ sub title   { shift->{title} }
 sub image   { shift->{image} }
 
 sub dir {
-	my $self = shift;
-	$DIR . '/' . $self->title;
+    my $self = shift;
+    $DIR . '/' . $self->title;
 }
 
 sub items {
-	my $self    = shift;
-	my $content = shift;
+    my $self    = shift;
+    my $content = shift;
 
-	if ( $content ) {
-		$self->{items} = [
-			map   { Item->new($_, $self) }
-			grep  { !/^\n\n\s+/ }
-			map   { s/^\s+<item>\s+//; $_ }
-			split /<\/item>/, $content
-		];
-	} else {
-		if ( $self->{items} ) {
-			wantarray ? @{ $self->{items} } : $self->{items};
-		} else {
-			wantarray ? () : [];
-		}
-	}
+    if ( $content ) {
+        $self->{items} = [
+            map   { Item->new($_, $self) }
+            grep  { !/^\n\n\s+/ }
+            map   { s/^\s+<item>\s+//; $_ }
+            split /<\/item>/, $content
+        ];
+    } else {
+        if ( $self->{items} ) {
+            wantarray ? @{ $self->{items} } : $self->{items};
+        } else {
+            wantarray ? () : [];
+        }
+    }
 }
 
 sub parse {
-	my $self = shift;
-	local $_ = $self->content;
-	
-	/<channel>(.*)<\/channel>/gs;
-	my $channel = $1;
+    my $self = shift;
+    local $_ = $self->content;
+    
+    /<channel>(.*)<\/channel>/gs;
+    my $channel = $1;
 
-	/<title>(.*)<\/title>/;
-	$self->{title} = $1;
+    /<title>(.*)<\/title>/;
+    $self->{title} = $1;
 
-	/<image>\s+<url>(.*)<\/url>/s;
-	$self->{image} = $1;
+    /<image>\s+<url>(.*)<\/url>/s;
+    $self->{image} = $1;
 
-	s/\s+<title>.*<\/itunes:block>//sg;
-	$self->items($_);
+    s/\s+<title>.*<\/itunes:block>//sg;
+    $self->items($_);
 }
 
 package Item;
@@ -97,19 +97,19 @@ use base qw(Parser);
 use File::Basename;
 
 my %tokens = (
-	title   => 'title',
-	link    => 'link',
-	pubDate => 'date'
+    title   => 'title',
+    link    => 'link',
+    pubDate => 'date'
 );
 
 sub new {
-	my ($class, $content, $feed) = @_;
-	
-	my $self = $class->SUPER::new($content);
+    my ($class, $content, $feed) = @_;
+    
+    my $self = $class->SUPER::new($content);
 
-	$self->{feed} = $feed;
+    $self->{feed} = $feed;
 
-	bless $self, $class;
+    bless $self, $class;
 }
 
 sub title { shift->{title} }
@@ -118,140 +118,140 @@ sub date  { shift->{date} }
 sub feed  { shift->{feed} }
 
 sub issue_dir {
-	my $self = shift;
-	$self->feed->dir . '/' . $self->date;
+    my $self = shift;
+    $self->feed->dir . '/' . $self->date;
 }
 
 sub dir {
-	my $self = shift;
-	$self->issue_dir . '/' . $self->file;
+    my $self = shift;
+    $self->issue_dir . '/' . $self->file;
 }
 
 sub file  {
-	my $self = shift;
-	$self->{file} //= basename $self->link if $self->link;
+    my $self = shift;
+    $self->{file} //= basename $self->link if $self->link;
 
-	$self->{file};
+    $self->{file};
 }
 
 sub parse {
-	my $self   = shift;
-	local $_   = $self->content;
+    my $self   = shift;
+    local $_   = $self->content;
 
-	for my $token (keys %tokens) {
-		/<$token>(.*)<\/$token>/s;
-		$self->{$tokens{$token}} = $1;
-	}
+    for my $token (keys %tokens) {
+        /<$token>(.*)<\/$token>/s;
+        $self->{$tokens{$token}} = $1;
+    }
 }
 
 package main;
 use File::Basename;
 
 BEGIN {
-	#
-	# Try loading Android (from SL4A), then create notify
-	# function which sends a notification message on Android
-	# or prints to STDOUT anywhere else
-	#
-	my $droid;
-	eval {
-		require Android;
-		Android->import;
-		$droid //= Android->new;
-	};
+    #
+    # Try loading Android (from SL4A), then create notify
+    # function which sends a notification message on Android
+    # or prints to STDOUT anywhere else
+    #
+    my $droid;
+    eval {
+        require Android;
+        Android->import;
+        $droid //= Android->new;
+    };
 
-	sub notify {
-		if ( $droid ) { $droid->notify('magbot', @_) }
-		else          { print @_, "\n" }
-	}
+    sub notify {
+        if ( $droid ) { $droid->notify('magbot', @_) }
+        else          { print @_, "\n" }
+    }
 
-	#
-	# Try loading LWP::Simple, otherwise use HTTP::Tiny
-	# to create work alikes for 'get' and 'getstore'
-	#
-	eval {
-		require LWP::Simple;
-		LWP::Simple->import;
-	};
-	if ( $@ ) {
-		require HTTP::Tiny;
-		HTTP::Tiny->import;
-	
-		no strict 'subs';
-		
-		*get = sub { HTTP::Tiny->new->get(@_)->{content} };
-	
-		*getstore = sub {
-			my $url  = shift;
-			my $file = shift;
-		
-			my $content = get $url;
-			open FILE, '>', $file or die "cannot open $file";
-			print FILE $file;
-			close FILE;
-		};
-	
-		use strict 'subs';
-	}
+    #
+    # Try loading LWP::Simple, otherwise use HTTP::Tiny
+    # to create work alikes for 'get' and 'getstore'
+    #
+    eval {
+        require LWP::Simple;
+        LWP::Simple->import;
+    };
+    if ( $@ ) {
+        require HTTP::Tiny;
+        HTTP::Tiny->import;
+    
+        no strict 'subs';
+        
+        *get = sub { HTTP::Tiny->new->get(@_)->{content} };
+    
+        *getstore = sub {
+            my $url  = shift;
+            my $file = shift;
+        
+            my $content = get $url;
+            open FILE, '>', $file or die "cannot open $file";
+            print FILE $file;
+            close FILE;
+        };
+    
+        use strict 'subs';
+    }
 
-	# Was an alias for File::Spec but SL4A doesn't include it :-(
-	sub path {
-		for ( @_ ) { return "" unless defined $_ }
-		join '/', @_
-	}
+    # Was an alias for File::Spec but SL4A doesn't include it :-(
+    sub path {
+        for ( @_ ) { return "" unless defined $_ }
+        join '/', @_
+    }
 }
 
 sub download_feeds {
-	my @urls     = @_;
-	my @contents = map { get $_ } @urls;
+    my @urls     = @_;
+    my @contents = map { get $_ } @urls;
 
-	wantarray ? @contents : \@contents;
+    wantarray ? @contents : \@contents;
 }
 
 sub find_new {
-	map  {  $_->[1] }
-	grep { !$_->[0] }
-	map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
+    map  {  $_->[1] }
+    grep { !$_->[0] }
+    map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
 }
 
 sub download_media {
-	my $dir  = shift;
-	my @urls = @_;
+    my $dir  = shift;
+    my @urls = @_;
 
-	mkdir $dir unless -e $dir;
+    mkdir $dir unless -e $dir;
 
-	notify "Downloading feeds and checking for new items...";
+    notify "Downloading feeds and checking for new items...";
 
-	my @items = find_new map { Feed->new($_) } download_feeds @urls;
-	if ( int(@items) == 0 ) {
-		notify "There's nothing new in your feeds.";
-		exit;
-	}
+    my @items = find_new map { Feed->new($_) } download_feeds @urls;
+    if ( int(@items) == 0 ) {
+        notify "There's nothing new in your feeds.";
+        exit;
+    }
 
-	notify "Downloading ", int(@items), " podcasts to $dir...\n";
-	
-	for my $item (@items) {
-		my $feed_dir = $item->feed->dir;
-		mkdir $feed_dir unless -e $feed_dir;
+    notify "Downloading ", int(@items), " podcasts to $dir...\n";
+    
+    for my $item (@items) {
+        my $feed_dir = $item->feed->dir;
+        mkdir $feed_dir unless -e $feed_dir;
 
-		my $issue_dir = $item->issue_dir;
-		my $path      = $item->dir;
+        my $issue_dir = $item->issue_dir;
+        my $path      = $item->dir;
 
-		mkdir $issue_dir unless -e $issue_dir;
+        mkdir $issue_dir unless -e $issue_dir;
 
-		if ( -e $path ) {
-			print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
-		} elsif ( !$item->link ) {
-			; # skip
-		} else {
-			print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
+        if ( -e $path ) {
+            print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
+        } elsif ( !$item->link ) {
+            ; # skip
+        } else {
+            print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
 
-			getstore $item->link, $path unless -e $path;
-			print "  ok.\n\n";
-		}
-	}
-	
-	notify "DONE.";
+            getstore $item->link, $path unless -e $path;
+            print "  ok.\n\n";
+        }
+    }
+    
+    notify "DONE.";
 }
 
 # Now to the main event!!
