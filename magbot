@@ -231,7 +231,6 @@ BEGIN {
         Gtk2::Notify->import(-init, basename $0);
         $gtk = 1;  
     };
-	if ($@) { print $@, "\n" }
 
     sub notify {
         if    ( $droid ) { $droid->notify($APP_NAME, @_) }
