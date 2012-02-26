@@ -2,6 +2,7 @@
 
 SDCARD=/media/7C4C-449E
 BIN=magbot
+DIR=/usr/bin
 
 all: deploy
 
@@ -10,7 +11,7 @@ deploy:
 	cp -rf extlib/lib/perl5/* $(SDCARD)/com.googlecode.perlforandroid/extras/perl/site_perl
 
 install:
-	cp $(BIN) $(HOME)/bin
+	cp $(BIN) $(DIR)
 
 uninstall:
-	rm $(HOME)/bin/$(BIN)
+	rm $(DIR)/$(BIN)
