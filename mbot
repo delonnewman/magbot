@@ -234,6 +234,7 @@ BEGIN {
         if    ( $droid ) { $droid->notify('magbot', @_) }
 		elsif ( $gtk   ) {
 			Gtk2::Notify->new("magbot", join('', @_))->show;
+			print @_, "\n";
 		}
         else { print @_, "\n" }
     }
