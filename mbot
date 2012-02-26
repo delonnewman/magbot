@@ -223,19 +223,19 @@ BEGIN {
         $droid //= Android->new;
     };
 
-	my $gtk;
-	eval {
-		require Gtk2::Notify;
-		Gtk2::Notify->import(-init, "magbot");
-		$gtk = 1;  
-	};
+    my $gtk;
+    eval {
+        require Gtk2::Notify;
+        Gtk2::Notify->import(-init, "magbot");
+        $gtk = 1;  
+    };
 
     sub notify {
         if    ( $droid ) { $droid->notify('magbot', @_) }
-		elsif ( $gtk   ) {
-			Gtk2::Notify->new("magbot", join('', @_))->show;
-			print @_, "\n";
-		}
+        elsif ( $gtk   ) {
+            Gtk2::Notify->new("magbot", join('', @_))->show;
+            print @_, "\n";
+        }
         else { print @_, "\n" }
     }
 
