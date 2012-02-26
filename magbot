@@ -8,15 +8,16 @@ binmode STDOUT, ":utf8";
 
 =head1 NAME
 
-mbot - For fetching media from podcast feeds
+magbot - For fetching media from jw.org feeds
 
 =head1 SYNOPSIS
 
-For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
-
-or via command line like so.
-
     > magbot
+
+=head1 DESCRIPTION
+
+For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
+or via command line.
 
 =head1 AUTHOR
 

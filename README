@@ -1,13 +1,12 @@
 NAME
-    mbot - For fetching media from podcast feeds
+    magbot - For fetching media from jw.org feeds
 
 SYNOPSIS
+        > magbot
+
+DESCRIPTION
     For use on Android devices via SL4A (see
-    http://code.google.com/p/android-scripting/)
-
-    or via command line like so.
-
-            > mbot
+    http://code.google.com/p/android-scripting/) or via command line.
 
 AUTHOR
     Delon Newman <delon.newman@gmail.com>
