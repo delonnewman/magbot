@@ -25,7 +25,9 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
+#
 # Settings
+#
 my @FORMATS   = qw{ MP3 EPUB };
 my @LANGUAGES = qw{ E };
 my @MAGS      = qw{ w wp g };
@@ -45,6 +47,12 @@ my %FORMATS = (
     PDF  => 'pub'
 );
     
+#
+# Classes
+#
+# These are for parsing the feeds.  Yes I know it's bad
+# to parse XML with regular expressions but I tried to do
+# it as clean as I could, _please_ forgive me. ;-)
 package Parser;
 
 sub new {
@@ -211,6 +219,9 @@ sub parse {
 package main;
 use File::Basename;
 
+#
+# Some monkey business for cross-platformability
+#
 BEGIN {
     #
     # Try loading Android (from SL4A) and Gtk2::Notify, then create 
@@ -270,6 +281,9 @@ BEGIN {
     }
 }
 
+#
+# Top-Level Functions
+#
 sub download_feeds {
     my @urls     = @_;
     my @contents = map { get $_ } @urls;
@@ -304,10 +318,9 @@ sub download_media {
         mkdir $feed_dir unless -e $feed_dir;
 
         my $issue_dir = $item->issue_dir;
-        my $path      = $item->dir;
-
         mkdir $issue_dir unless -e $issue_dir;
 
+        my $path = $item->dir;
         if ( -e $path ) {
             print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
         } elsif ( !$item->link ) {
@@ -323,10 +336,8 @@ sub download_media {
     notify "Okay the work is complete! ;-)";
 }
 
-sub apply {
-    my ($fn) = shift;
-    map { $fn->($_) } @_;
-}
+# for readability, toOO many nested maps
+sub apply { map { shift->($_) } @_ }
 
 # partially applied function to da FACE!!
 sub gen_urls {
