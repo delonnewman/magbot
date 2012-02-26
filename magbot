@@ -359,5 +359,11 @@ sub gen_urls {
 }
 
 # Now to the main event!!
-my @urls = map { apply $_, @LANGUAGES } map { apply $_, @MAGS } map { gen_urls $_ } @FORMATS;
-download_media @urls if __FILE__ eq $0;
+if ( __FILE__ eq $0 ) {
+	my @urls =
+		map { apply $_, @LANGUAGES }
+		map { apply $_, @MAGS }
+		map { gen_urls $_ } @FORMATS;
+
+	download_media @urls;
+}
