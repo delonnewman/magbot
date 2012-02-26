@@ -30,15 +30,15 @@ my @LANGUAGES = qw{ E };
 my @MAGS      = qw{ w wp g };
 
 my $DIR = {
-	audio => "$ENV{HOME}/Podcasts",
-	pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Books"]
+    audio => "$ENV{HOME}/Podcasts",
+    pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Books"]
 };
 
 my %FORMATS = (
-	MP3  => 'audio',
-	M4B  => 'audio',
-	EPUB => 'pub',
-	PDF  => 'pub'
+    MP3  => 'audio',
+    M4B  => 'audio',
+    EPUB => 'pub',
+    PDF  => 'pub'
 );
     
 package Parser;
@@ -66,42 +66,42 @@ use LWP::Simple;
 # Constructors
 
 sub new {
-	my ($class, %args) = @_;
+    my ($class, %args) = @_;
     bless \%args, $class;
 }
 
 sub parse {
-	my    $class = shift;
+    my    $class = shift;
     local $_     = shift; # content
-	my    %args  = ();
+    my    %args  = ();
 
     /<channel>(.*)<\/channel>/gs;
     my $channel = $1;
 
     /<title>(.*)<\/title>/;
-	$args{title} = $1;
+    $args{title} = $1;
 
     /<image>\s+<url>(.*)<\/url>/s;
-	$args{image} = $1;
+    $args{image} = $1;
 
     /<atom:link href="(.*)" rel/s;
-	$args{url} = $1;
+    $args{url} = $1;
 
     /<description>(.*)<\/description>/;
-	$args{description} = $1;
+    $args{description} = $1;
 
-	my $pub;
+    my $pub;
 
-	($pub, $args{format}) = split ' ', $args{description};
-	$pub =~ /([a-z]+)([A-Z]+)/;
-	($args{mag}, $args{lang}) = ($1, $2);
+    ($pub, $args{format}) = split ' ', $args{description};
+    $pub =~ /([a-z]+)([A-Z]+)/;
+    ($args{mag}, $args{lang}) = ($1, $2);
 
-	my $self = $class->new(%args);
+    my $self = $class->new(%args);
 
     s/\s+<title>.*<\/itunes:block>//sg;
     $self->items($_);
 
-	$self;
+    $self;
 }
 
 # Attributes
@@ -118,21 +118,21 @@ sub lang        { shift->{lang} }
 
 sub dir {
     my $self = shift;
-	$self->root_dir . '/' . $self->title;
+    $self->root_dir . '/' . $self->title;
 }
 
 sub root_dir {
-	my $self = shift;
-	my $type = $FORMATS{$self->format};
+    my $self = shift;
+    my $type = $FORMATS{$self->format};
 
-	if ( ref $DIR eq 'HASH' ) {
-		if ( ref $DIR->{$type} eq 'ARRAY' ) {
-			if ( -e $DIR->{$type}->[0] ) { $DIR->{$type}->[0] }
-			else                         { $DIR->{$type}->[1] }
-		}
-		else { $DIR->{$type} }
-	}
-	else { $DIR }
+    if ( ref $DIR eq 'HASH' ) {
+        if ( ref $DIR->{$type} eq 'ARRAY' ) {
+            if ( -e $DIR->{$type}->[0] ) { $DIR->{$type}->[0] }
+            else                         { $DIR->{$type}->[1] }
+        }
+        else { $DIR->{$type} }
+    }
+    else { $DIR }
 }
 
 sub items {
@@ -272,14 +272,14 @@ sub download_feeds {
 }
 
 sub apply {
-	my ($fn) = shift;
-	map { $fn->($_) } @_;
+    my ($fn) = shift;
+    map { $fn->($_) } @_;
 }
 
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
-	map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
+    map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
 }
 
 sub download_media {
@@ -296,8 +296,8 @@ sub download_media {
     notify "Downloading ", int(@items), " items...\n";
     
     for my $item (@items) {
-		my $root_dir = $item->feed->root_dir;
-		mkdir $root_dir unless -e $root_dir;
+        my $root_dir = $item->feed->root_dir;
+        mkdir $root_dir unless -e $root_dir;
 
         my $feed_dir = $item->feed->dir;
         mkdir $feed_dir unless -e $feed_dir;
@@ -323,25 +323,25 @@ sub download_media {
 }
 
 sub gen_urls {
-	my ($format) = @_;
+    my ($format) = @_;
 
     my %types = (
-    	audio => 'sFFZRQVNZNT',
-    	pub   => 'sFFCsVrGZNT'
+        audio => 'sFFZRQVNZNT',
+        pub   => 'sFFCsVrGZNT'
     );
     
-	my $type = $FORMATS{$format};
+    my $type = $FORMATS{$format};
 
-	my $d = do {
-	};
+    my $d = do {
+    };
 
-	sub {
-		my ($mag) = @_;
-		sub {
-			my ($lang) = @_;
-			"http://www.jw.org/index.xjp?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
-		}
-	}
+    sub {
+        my ($mag) = @_;
+        sub {
+            my ($lang) = @_;
+            "http://www.jw.org/index.xjp?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
+        }
+    }
 }
 
 # Now to the main event!!
