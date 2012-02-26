@@ -65,8 +65,6 @@ sub content { shift->{content} }
 package Feed;
 use base qw(Parser);
 
-use LWP::Simple;
-
 # Constructors
 
 sub new {
