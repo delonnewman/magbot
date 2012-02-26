@@ -29,7 +29,8 @@ my @FORMATS   = qw{ MP3 EPUB };
 my @LANGUAGES = qw{ E };
 my @MAGS      = qw{ w wp g };
 
-my $ROOT_URL = "http://www.jw.org/index.xjp";
+my $ROOT_URL = 'http://www.jw.org/index.xjp';
+my $APP_NAME = 'MagBot';
 
 my $DIR = {
     audio => "$ENV{HOME}/Podcasts",
@@ -227,14 +228,15 @@ BEGIN {
     my $gtk;
     eval {
         require Gtk2::Notify;
-        Gtk2::Notify->import(-init, "magbot");
+        Gtk2::Notify->import(-init, basename $0);
         $gtk = 1;  
     };
+	if ($@) { print $@, "\n" }
 
     sub notify {
-        if    ( $droid ) { $droid->notify('magbot', @_) }
+        if    ( $droid ) { $droid->notify($APP_NAME, @_) }
         elsif ( $gtk   ) {
-            Gtk2::Notify->new("magbot", join('', @_))->show;
+            Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
             print @_, "\n";
         }
         else { print @_, "\n" }
@@ -326,7 +328,7 @@ sub download_media {
         }
     }
     
-    notify "DONE.";
+    notify "Okay the work is complete! ;-)";
 }
 
 sub apply {
