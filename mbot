@@ -16,7 +16,7 @@ For use on Android devices via SL4A (see http://code.google.com/p/android-script
 
 or via command line like so.
 
-    > mbot
+    > magbot
 
 =head1 AUTHOR
 
@@ -24,8 +24,23 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
-my $DIR = "$ENV{HOME}/Podcasts";
+# Settings
+my @FORMATS   = qw{ MP3 EPUB };
+my @LANGUAGES = qw{ E };
+my @MAGS      = qw{ w wp g };
 
+my $DIR = {
+	audio => "$ENV{HOME}/Podcasts",
+	pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Books"]
+};
+
+my %FORMATS = (
+	MP3  => 'audio',
+	M4B  => 'audio',
+	EPUB => 'pub',
+	PDF  => 'pub'
+);
+    
 package Parser;
 
 sub new {
@@ -46,18 +61,82 @@ sub content { shift->{content} }
 package Feed;
 use base qw(Parser);
 
-sub channel { shift->{channel} }
-sub title   { shift->{title} }
-sub image   { shift->{image} }
+use LWP::Simple;
+
+# Constructors
+
+sub new {
+	my ($class, %args) = @_;
+    bless \%args, $class;
+}
+
+sub parse {
+	my    $class = shift;
+    local $_     = shift; # content
+	my    %args  = ();
+
+    /<channel>(.*)<\/channel>/gs;
+    my $channel = $1;
+
+    /<title>(.*)<\/title>/;
+	$args{title} = $1;
+
+    /<image>\s+<url>(.*)<\/url>/s;
+	$args{image} = $1;
+
+    /<atom:link href="(.*)" rel/s;
+	$args{url} = $1;
+
+    /<description>(.*)<\/description>/;
+	$args{description} = $1;
+
+	my $pub;
+
+	($pub, $args{format}) = split ' ', $args{description};
+	$pub =~ /([a-z]+)([A-Z]+)/;
+	($args{mag}, $args{lang}) = ($1, $2);
+
+	my $self = $class->new(%args);
+
+    s/\s+<title>.*<\/itunes:block>//sg;
+    $self->items($_);
+
+	$self;
+}
+
+# Attributes
+
+sub title       { shift->{title} }
+sub image       { shift->{image} }
+sub description { shift->{description} }
+sub url         { shift->{url} }
+sub format      { shift->{format} }
+sub mag         { shift->{mag} }
+sub lang        { shift->{lang} }
+
+# Methods
 
 sub dir {
     my $self = shift;
-    $DIR . '/' . $self->title;
+	$self->root_dir . '/' . $self->title;
+}
+
+sub root_dir {
+	my $self = shift;
+	my $type = $FORMATS{$self->format};
+
+	if ( ref $DIR eq 'HASH' ) {
+		if ( ref $DIR->{$type} eq 'ARRAY' ) {
+			if ( -e $DIR->{$type}->[0] ) { $DIR->{$type}->[0] }
+			else                         { $DIR->{$type}->[1] }
+		}
+		else { $DIR->{$type} }
+	}
+	else { $DIR }
 }
 
 sub items {
-    my $self    = shift;
-    my $content = shift;
+    my ($self, $content) = @_;
 
     if ( $content ) {
         $self->{items} = [
@@ -73,23 +152,6 @@ sub items {
             wantarray ? () : [];
         }
     }
-}
-
-sub parse {
-    my $self = shift;
-    local $_ = $self->content;
-    
-    /<channel>(.*)<\/channel>/gs;
-    my $channel = $1;
-
-    /<title>(.*)<\/title>/;
-    $self->{title} = $1;
-
-    /<image>\s+<url>(.*)<\/url>/s;
-    $self->{image} = $1;
-
-    s/\s+<title>.*<\/itunes:block>//sg;
-    $self->items($_);
 }
 
 package Item;
@@ -146,6 +208,7 @@ sub parse {
 
 package main;
 use File::Basename;
+use YAML qw(Load);
 
 BEGIN {
     #
@@ -208,29 +271,34 @@ sub download_feeds {
     wantarray ? @contents : \@contents;
 }
 
+sub apply {
+	my ($fn) = shift;
+	map { $fn->($_) } @_;
+}
+
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
-    map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
+	map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
 }
 
 sub download_media {
-    my $dir  = shift;
     my @urls = @_;
-
-    mkdir $dir unless -e $dir;
 
     notify "Downloading feeds and checking for new items...";
 
-    my @items = find_new map { Feed->new($_) } download_feeds @urls;
+    my @items = find_new map { Feed->parse($_) } download_feeds @urls;
     if ( int(@items) == 0 ) {
         notify "There's nothing new in your feeds.";
         exit;
     }
 
-    notify "Downloading ", int(@items), " podcasts to $dir...\n";
+    notify "Downloading ", int(@items), " items...\n";
     
     for my $item (@items) {
+		my $root_dir = $item->feed->root_dir;
+		mkdir $root_dir unless -e $root_dir;
+
         my $feed_dir = $item->feed->dir;
         mkdir $feed_dir unless -e $feed_dir;
 
@@ -254,13 +322,28 @@ sub download_media {
     notify "DONE.";
 }
 
-# Now to the main event!!
-download_media $DIR, <DATA>;
+sub gen_urls {
+	my ($format) = @_;
 
-__DATA__
-http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=g&rfm=epub
-http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=w&rfm=epub
-http://www.jw.org/index.xjp?option=sFFCsVrGZNT&rln=E&rmn=wp&rfm=epub
-http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=g&rfm=mp3
-http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=w&rfm=mp3
-http://www.jw.org/index.xjp?option=sFFZRQVNZNT&rln=E&rmn=wp&rfm=mp3
+    my %types = (
+    	audio => 'sFFZRQVNZNT',
+    	pub   => 'sFFCsVrGZNT'
+    );
+    
+	my $type = $FORMATS{$format};
+
+	my $d = do {
+	};
+
+	sub {
+		my ($mag) = @_;
+		sub {
+			my ($lang) = @_;
+			"http://www.jw.org/index.xjp?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
+		}
+	}
+}
+
+# Now to the main event!!
+my @urls = map { apply $_, @LANGUAGES } map { apply $_, @MAGS } map { gen_urls $_ } @FORMATS;
+download_media @urls if __FILE__ eq $0;
