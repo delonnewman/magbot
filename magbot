@@ -29,6 +29,8 @@ my @FORMATS   = qw{ MP3 EPUB };
 my @LANGUAGES = qw{ E };
 my @MAGS      = qw{ w wp g };
 
+my $ROOT_URL = "http://www.jw.org/index.xjp";
+
 my $DIR = {
     audio => "$ENV{HOME}/Podcasts",
     pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Books"]
@@ -348,7 +350,7 @@ sub gen_urls {
         my ($mag) = @_;
         sub {
             my ($lang) = @_;
-            "http://www.jw.org/index.xjp?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
+            "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
         }
     }
 }
