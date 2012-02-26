@@ -1,4 +1,4 @@
-.PHONY: all install uninstall doc deploy
+.PHONY: all install uninstall doc deploy clean_doc
 
 SDCARD=/media/7C4C-449E
 BIN=magbot
@@ -18,10 +18,14 @@ install:
 uninstall:
 	rm $(DIR)/$(BIN)
 
-doc: README $(BIN).1
+doc: clean_doc README $(BIN).1
+
+clean_doc:
+	rm README # force update
+	rm $(BIN).1 # force update
 
 README:
 	pod2text $(BIN) > README
 
 $(BIN).1:
-	pod2man $(BIN) > $(BIN).1
+	pod2man -c MagBot $(BIN) > $(BIN).1
