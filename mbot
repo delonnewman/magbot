@@ -271,11 +271,6 @@ sub download_feeds {
     wantarray ? @contents : \@contents;
 }
 
-sub apply {
-    my ($fn) = shift;
-    map { $fn->($_) } @_;
-}
-
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
@@ -322,6 +317,12 @@ sub download_media {
     notify "DONE.";
 }
 
+sub apply {
+    my ($fn) = shift;
+    map { $fn->($_) } @_;
+}
+
+# partially applied function to da FACE!!
 sub gen_urls {
     my ($format) = @_;
 
@@ -331,9 +332,6 @@ sub gen_urls {
     );
     
     my $type = $FORMATS{$format};
-
-    my $d = do {
-    };
 
     sub {
         my ($mag) = @_;
