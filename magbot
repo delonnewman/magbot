@@ -225,7 +225,7 @@ use File::Basename;
 BEGIN {
     #
     # Try loading Android (from SL4A) and Gtk2::Notify, then create 
-	# notify function which sends a notification message on Android
+    # notify function which sends a notification message on Android
     # or GNOME or prints to STDOUT anywhere else
     #
     my $droid;
