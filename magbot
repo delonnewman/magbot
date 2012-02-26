@@ -210,7 +210,6 @@ sub parse {
 
 package main;
 use File::Basename;
-use YAML qw(Load);
 
 BEGIN {
     #
