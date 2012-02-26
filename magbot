@@ -134,7 +134,7 @@ sub dir {
 sub root_dir {
     my $self = shift;
     my $type = $FORMATS{$self->format} ||
-    	die 'cannot find root directory for: ', $self->format;
+        die 'cannot find root directory for: ', $self->format;
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -285,12 +285,7 @@ BEGIN {
 #
 # Top-Level Functions
 #
-sub download_feeds {
-    my @urls     = @_;
-    my @contents = map { get $_ } @urls;
-
-    wantarray ? @contents : \@contents;
-}
+sub download_feeds { map { get $_ } @_ }
 
 sub find_new {
     map  {  $_->[1] }
