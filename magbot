@@ -324,7 +324,7 @@ sub download_media {
         if ( -e $path ) {
             print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
         } elsif ( !$item->link ) {
-            ; # skip
+            next;
         } else {
             print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
 
