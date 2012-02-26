@@ -214,9 +214,9 @@ use File::Basename;
 
 BEGIN {
     #
-    # Try loading Android (from SL4A), then create notify
-    # function which sends a notification message on Android
-    # or prints to STDOUT anywhere else
+    # Try loading Android (from SL4A) and Gtk2::Notify, then create 
+	# notify function which sends a notification message on Android
+    # or GNOME or prints to STDOUT anywhere else
     #
     my $droid;
     eval {
@@ -268,12 +268,6 @@ BEGIN {
         };
     
         use strict 'subs';
-    }
-
-    # Was an alias for File::Spec but SL4A doesn't include it :-(
-    sub path {
-        for ( @_ ) { return "" unless defined $_ }
-        join '/', @_
     }
 }
 
