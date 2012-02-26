@@ -334,8 +334,8 @@ sub download_media {
 
 # for readability, toOO many nested maps
 sub apply {
-    my $fn = shift;
-    map { $fn->($_) } @_;
+    my ($fn, @list) = @_;
+    map { $fn->($_) } @list;
 }
 
 # partially applied function to da FACE!!
