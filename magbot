@@ -133,7 +133,8 @@ sub dir {
 
 sub root_dir {
     my $self = shift;
-    my $type = $FORMATS{$self->format};
+	my $type = $FORMATS{$self->format} ||
+		die 'cannot find root directory for: ', $self->format;
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -337,7 +338,10 @@ sub download_media {
 }
 
 # for readability, toOO many nested maps
-sub apply { map { $_[0]->($_) } @_ }
+sub apply {
+	my $fn = shift;
+	map { $fn->($_) } @_;
+}
 
 # partially applied function to da FACE!!
 sub gen_urls {
