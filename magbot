@@ -37,7 +37,7 @@ my $APP_NAME = 'MagBot';
 
 my $DIR = {
     audio => "$ENV{HOME}/Podcasts",
-    pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Books"]
+    pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Reading"]
 };
 
 my %FORMATS = (
