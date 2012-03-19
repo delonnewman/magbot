@@ -28,7 +28,7 @@ Delon Newman <delon.newman@gmail.com>
 #
 # Settings
 #
-my @FORMATS   = qw{ MP3 EPUB };
+my @FORMATS   = qw{ EPUB };
 my @LANGUAGES = qw{ E };
 my @MAGS      = qw{ w wp g };
 
