@@ -1,13 +1,23 @@
 .PHONY: all install uninstall doc deploy clean_doc install-deps
 
-SDCARD=/media/7C4C-449E
+# files
 BIN=magbot
+MAN=$(BIN).1
+SCRIPT=nook-script
+RULE=10-nook.rules
+
+# dirs
+SDCARD=/media/7C4C-449E
 DIR=/usr/local/bin
 DOC=/usr/local/share/man/man1
+UDEV=/etc/udev/rules.d
+
+# dependencies
 PKG_BIN=apt-get install
 CPAN_BIN=cpanm
 PERL_DEPS=LWP::Simple Gtk2::Notify
 SYS_DEPS=libgtk2-notify-perl
+
 
 all: deploy
 
@@ -17,8 +27,9 @@ deploy:
 
 install: install-deps
 	cp $(BIN) $(DIR)
-	cp $(BIN).1 $(DOC)
-	cp nook-script $(DIR)
+	cp $(MAN) $(DOC)
+	cp $(SCRIPT) $(DIR)
+	cp $(RULE) $(UDEV)
 
 install-deps:
 	$(PKG_BIN) $(SYS_DEPS)
@@ -26,8 +37,9 @@ install-deps:
 
 uninstall:
 	rm $(DIR)/$(BIN)
-	rm $(DOC)/$(BIN).1
-	rm $(DIR)/nook-script
+	rm $(DOC)/$(MAN)
+	rm $(DIR)/$(SCRIPT)
+	rm $(UDEV)/$(RULE)
 
 doc: clean_doc README $(BIN).1
 
