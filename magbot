@@ -243,13 +243,20 @@ BEGIN {
         $gtk = 1;  
     };
 
+	use Sys::Syslog qw{ :standard };
+
     sub notify {
         if    ( $droid ) { $droid->notify($APP_NAME, @_) }
         elsif ( $gtk   ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
             print @_, "\n";
         }
-        else { print @_, "\n" }
+		else {
+			openlog $APP_NAME, 'ndelay,pid', 'local0';
+			syslog 'info', @_;
+			closelog;
+			print @_, "\n";
+		}
     }
 
     #

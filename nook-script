@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# wait for the mount
+sleep 5
+
+# call the bot!
+exec /usr/local/bin/magbot
