@@ -251,12 +251,13 @@ BEGIN {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
             print @_, "\n";
         }
-		else {
-			openlog $APP_NAME, 'ndelay,pid', 'local0';
-			syslog 'info', @_;
-			closelog;
-			print @_, "\n";
-		}
+		else { print @_, "\n" }
+
+		# syslog
+		openlog $APP_NAME, 'ndelay,pid', 'local0';
+		syslog 'info', @_;
+		closelog;
+		1;
     }
 
     #
