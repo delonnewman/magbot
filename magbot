@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+use File::Basename;
+
 binmode STDOUT, ":utf8";
 
 =pod
@@ -47,94 +49,47 @@ my %FORMATS = (
     PDF  => 'pub'
 );
     
-#
-# Classes
-#
 # These are for parsing the feeds.  Yes I know it's bad
 # to parse XML with regular expressions but I tried to do
 # it as clean as I could, _please_ forgive me. ;-)
-package Parser;
-
-sub new {
-    my $class   = shift;
-    my $content = shift;
-
-    my $obj = bless {
-        content => $content,
-    }, $class;
-
-    $obj->parse;
-
-    $obj;
-}
-
-sub content { shift->{content} }
-
-package Feed;
-use base qw(Parser);
-
-# Constructors
-
-sub new {
-    my ($class, %args) = @_;
-    bless \%args, $class;
-}
-
-sub parse {
-    my    $class = shift;
+sub parse_feed {
     local $_     = shift; # content
-    my    %args  = ();
+    my    %feed  = ();
 
     /<channel>(.*)<\/channel>/gs;
     my $channel = $1;
 
     /<title>(.*)<\/title>/;
-    $args{title} = $1;
+    $feed{title} = $1;
 
     /<image>\s+<url>(.*)<\/url>/s;
-    $args{image} = $1;
+    $feed{image} = $1;
 
     /<atom:link href="(.*)" rel/s;
-    $args{url} = $1;
+    $feed{url} = $1;
 
     /<description>(.*)<\/description>/;
-    $args{description} = $1;
+    $feed{description} = $1;
 
-    my $pub;
-
-    ($pub, $args{format}) = split ' ', $args{description};
+    (my $pub, $feed{format}) = split ' ', $feed{description};
     $pub =~ /([a-z]+)([A-Z]+)/;
-    ($args{mag}, $args{lang}) = ($1, $2);
-
-    my $self = $class->new(%args);
+    ($feed{mag}, $feed{lang}) = ($1, $2);
 
     s/\s+<title>.*<\/itunes:block>//sg;
-    $self->items($_);
+	$feed{items} = parse_items($_, \%feed);
 
-    $self;
+    \%feed;
 }
 
-# Attributes
-
-sub title       { shift->{title} }
-sub image       { shift->{image} }
-sub description { shift->{description} }
-sub url         { shift->{url} }
-sub format      { shift->{format} }
-sub mag         { shift->{mag} }
-sub lang        { shift->{lang} }
-
-# Methods
-
-sub dir {
-    my $self = shift;
-    $self->root_dir . '/' . $self->title;
+sub feed_dir {
+    my $feed = shift;
+	root_dir($feed) . '/' . $feed->{title};
 }
 
 sub root_dir {
-    my $self = shift;
-    my $type = $FORMATS{$self->format} ||
-        die 'cannot find root directory for: ', $self->format;
+    my $feed = shift;
+	my $type = $FORMATS{$feed->{format}} ||
+		die 'cannot find root directory for: ', $feed->{format};
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -146,79 +101,62 @@ sub root_dir {
     else { $DIR }
 }
 
-sub items {
-    my ($self, $content) = @_;
+sub parse_items {
+    my ($content, $feed) = @_;
 
     if ( $content ) {
-        $self->{items} = [
-            map   { Item->new($_, $self) }
+       my @items = 
+            map   { parse_item($_, $feed) }
             grep  { !/^\n\n\s+/ }
             map   { s/^\s+<item>\s+//; $_ }
-            split /<\/item>/, $content
-        ];
-    } else {
-        if ( $self->{items} ) {
-            wantarray ? @{ $self->{items} } : $self->{items};
-        } else {
-            wantarray ? () : [];
-        }
+            split /<\/item>/, $content;
+
+		wantarray ? @items : \@items;
+	}
+	else {
+        wantarray ? () : [];
     }
 }
 
-package Item;
-use base qw(Parser);
-use File::Basename;
+sub parse_item {
+    local $_   = shift; # content
+	my $feed   = shift;
+	my %tokens = (
+		title   => 'title',
+		link    => 'link',
+		pubDate => 'date'
+	);
 
-my %tokens = (
-    title   => 'title',
-    link    => 'link',
-    pubDate => 'date'
-);
-
-sub new {
-    my ($class, $content, $feed) = @_;
-    
-    my $self = $class->SUPER::new($content);
-
-    $self->{feed} = $feed;
-
-    bless $self, $class;
-}
-
-sub title { shift->{title} }
-sub link  { shift->{link} }
-sub date  { shift->{date} }
-sub feed  { shift->{feed} }
-
-sub issue_dir {
-    my $self = shift;
-    $self->feed->dir . '/' . $self->date;
-}
-
-sub dir {
-    my $self = shift;
-    $self->issue_dir . '/' . $self->file;
-}
-
-sub file  {
-    my $self = shift;
-    $self->{file} //= basename $self->link if $self->link;
-
-    $self->{file};
-}
-
-sub parse {
-    my $self   = shift;
-    local $_   = $self->content;
+	my %item = (feed => $feed);
 
     for my $token (keys %tokens) {
         /<$token>(.*)<\/$token>/s;
-        $self->{$tokens{$token}} = $1;
+        $item{$tokens{$token}} = $1;
     }
+
+	\%item;
 }
 
-package main;
-use File::Basename;
+sub issue_dir {
+    my ($item, $feed_dir) = @_;
+	$feed_dir . '/' . $item->{date};
+}
+
+sub item_dir {
+    my ($item) = @_;
+	my $issue_dir = issue_dir($item, feed_dir($item->{feed}));
+	$issue_dir . '/' . item_file($item);
+}
+
+sub item_file  {
+    my ($item) = @_;
+
+	# TODO: remove this
+	$item->{file} //= basename $item->{link} if $item->{link};
+
+    $item->{file};
+}
+
 
 #
 # Some monkey business for cross-platformability
@@ -290,6 +228,8 @@ BEGIN {
     }
 }
 
+use Data::Dump qw(dump);
+
 #
 # Top-Level Functions
 #
@@ -298,7 +238,7 @@ sub download_feeds { map { get $_ } @_ }
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
-    map  { map { [ -e $_->dir, $_ ]  } @{$_->items} } @_;
+	map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
 }
 
 sub download_media {
@@ -306,7 +246,7 @@ sub download_media {
 
     notify "Downloading feeds and checking for new items...";
 
-    my @items = find_new map { Feed->parse($_) } download_feeds @urls;
+    my @items = find_new map { parse_feed($_) } download_feeds @urls;
     if ( int(@items) == 0 ) {
         notify "There's nothing new in your feeds.";
         exit;
@@ -315,24 +255,24 @@ sub download_media {
     notify "Downloading ", int(@items), " items...\n";
     
     for my $item (@items) {
-        my $root_dir = $item->feed->root_dir;
+		my $root_dir = root_dir $item->{feed};
         mkdir $root_dir unless -e $root_dir;
 
-        my $feed_dir = $item->feed->dir;
+		my $feed_dir = feed_dir $item->{feed};
         mkdir $feed_dir unless -e $feed_dir;
 
-        my $issue_dir = $item->issue_dir;
+        my $issue_dir = issue_dir $item, $feed_dir;
         mkdir $issue_dir unless -e $issue_dir;
 
-        my $path = $item->dir;
+        my $path = item_dir $item;
         if ( -e $path ) {
-            print "  '", $item->title, "' exists at\n   --> '", $path, "'\n\n";
-        } elsif ( !$item->link ) {
+			print "  '", $item->{title}, "' exists at\n   --> '", $path, "'\n\n";
+		} elsif ( !$item->{link} ) {
             next;
         } else {
-            print "  downloading '", $item->title, "' to \n  --> ", $path, "\n";
+			print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
 
-            getstore $item->link, $path unless -e $path;
+			getstore $item->{link}, $path unless -e $path;
             print "  ok.\n\n";
         }
     }
