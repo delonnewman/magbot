@@ -15,7 +15,7 @@ UDEV=/etc/udev/rules.d
 # dependencies
 PKG_BIN=apt-get install
 CPAN_BIN=cpanm
-PERL_DEPS=LWP::Simple Gtk2::Notify
+PERL_DEPS=HTTP::Tiny Gtk2::Notify
 SYS_DEPS=libgtk2-notify-perl
 
 

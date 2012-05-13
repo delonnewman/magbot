@@ -48,7 +48,7 @@ my $APP_NAME = 'MagBot';
 
 my $DIR = {
     audio => "$ENV{HOME}/Podcasts",
-    pub   => ['/media/NOOK/My Files/Magazines', "$ENV{HOME}/Reading"]
+    pub   => "$ENV{HOME}/Reading"
 };
 
 my %FORMATS = (
@@ -59,13 +59,13 @@ my %FORMATS = (
 );
     
 #
-# Some monkey business for versitile IO
+# Some monkey business for IO
 #
 
 # get content from HTTP
 sub get { HTTP::Tiny->new->get(@_)->{content} };
     
-# get and store content from HTTP
+# get and store content from HTTP to a file
 sub getstore {
     my $url  = shift;
     my $file = shift;
