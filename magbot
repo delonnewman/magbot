@@ -55,9 +55,8 @@ my %FORMATS = (
 #
 BEGIN {
     #
-    # Try loading Gtk2::Notify, then create notify function which
-    # sends a notification message or GNOME or prints to STDOUT
-    # anywhere else, also logs to syslog
+    # Print messages with Gtk2::Notify, to syslog, and to STDOUT
+    # any of which are available.
     #
     my $gtk;
     eval {
@@ -66,20 +65,25 @@ BEGIN {
         $gtk = 1;  
     };
 
-    use Sys::Syslog qw{ :standard };
+    my $syslog;
+    eval {
+        require Sys::Syslog
+        Sys::Syslog->import(qw{ :standard });
+        $syslog = 1;
+    };
 
     sub notify {
         if ( $gtk ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
-            print @_, "\n";
         }
-        else { print @_, "\n" }
 
-        # syslog
-        openlog $APP_NAME, 'ndelay,pid', 'local0';
-        syslog 'info', @_;
-        closelog;
-        1;
+        if ( $syslog ) {
+            openlog $APP_NAME, 'ndelay,pid', 'local0';
+            syslog 'info', @_;
+            closelog;
+        }
+
+        print @_, "\n"
     }
 
     #
