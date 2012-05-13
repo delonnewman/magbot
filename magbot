@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+use Data::Dump qw(dump);
+use XML::LibXML;
 use File::Basename;
 
 binmode STDOUT, ":utf8";
@@ -54,9 +56,9 @@ my %FORMATS = (
 #
 BEGIN {
     #
-	# Try loading Gtk2::Notify, then create notify function which
-	# sends a notification message or GNOME or prints to STDOUT
-	# anywhere else, also logs to syslog
+    # Try loading Gtk2::Notify, then create notify function which
+    # sends a notification message or GNOME or prints to STDOUT
+    # anywhere else, also logs to syslog
     #
     my $gtk;
     eval {
@@ -112,45 +114,72 @@ BEGIN {
 }
 
 #
-# These are for parsing the feeds.  Yes I know it's bad
-# to parse XML with regular expressions but I tried to do
-# it as clean as I could, _please_ forgive me. ;-)
+# For parsing feeds
 #
 sub parse_feed {
-    local $_     = shift; # content
-    my    %feed  = ();
+    local $_ = shift; # content
+    my %feed = ();
 
-    /<channel>(.*)<\/channel>/gs;
-    my $channel = $1;
+    my $dom  = XML::LibXML->load_xml(string => $_);
+    my $chan = $dom->getElementsByTagName('channel')->get_node(0);
 
-    /<title>(.*)<\/title>/;
-    $feed{title} = $1;
+    sub child {
+        my ($parent, %args) = @_;
 
-    /<image>\s+<url>(.*)<\/url>/s;
-    $feed{image} = $1;
+        my @tags  = @{$args{tags}} if $args{tags};
+        my $tag   = $args{tag} // shift @tags;
+        my $nodes = $parent->getChildrenByTagName($tag);
 
-    /<atom:link href="(.*)" rel/s;
-    $feed{url} = $1;
+        if ( $nodes->size > 1 ) {
+            my @elems = $nodes->get_nodelist;
+            wantarray ? @elems : \@elems;
+        } else {
+            my $elem  = $nodes->get_node(0);
 
-    /<description>(.*)<\/description>/;
-    $feed{description} = $1;
+            if    ( $args{attr} ) { $elem->getAttribute($args{attr}) }
+            elsif ( !@tags )      { $elem->textContent }
+            else                  { child($elem, tags => \@tags) }
+        }
+    }
 
+    sub items {
+        my ($feed, @elems) = @_;
+
+        my @items = map {
+          { title => child($_, tag => 'title'),
+            link  => child($_, tag => 'link'),
+            date  => child($_, tag => 'pubDate'),
+            feed  => $feed }
+        } @elems;
+
+        \@items;
+    }
+    
+    $feed{title}       = child $chan, tag  => 'title';
+    $feed{description} = child $chan, tag  => 'description';
+    $feed{language}    = child $chan, tag  => 'language';
+    $feed{image}       = child $chan, tags => ['image', 'url'];
+    $feed{url}         = child $chan, tag  => 'atom:link', attr => 'href';
+    $feed{items}       = items(\%feed, child($chan, tag => 'item'));
+
+    # TODO: remove this
     (my $pub, $feed{format}) = split ' ', $feed{description};
     $pub =~ /([a-z]+)([A-Z]+)/;
     ($feed{mag}, $feed{lang}) = ($1, $2);
 
-    s/\s+<title>.*<\/itunes:block>//sg;
-    $feed{items} = parse_items($_, \%feed);
-
     \%feed;
 }
+
+#
+# Some functions for accessing directory structure
+#
 
 sub feed_dir {
     my $feed = shift;
 
-	$feed->{dir} //= root_dir($feed) . '/' . $feed->{title};
+    $feed->{dir} //= root_dir($feed) . '/' . $feed->{title};
 
-	$feed->{dir};
+    $feed->{dir};
 }
 
 sub root_dir {
@@ -168,42 +197,6 @@ sub root_dir {
     else { $DIR }
 }
 
-sub parse_items {
-    my ($content, $feed) = @_;
-
-    if ( $content ) {
-       my @items = 
-            map   { parse_item($_, $feed) }
-            grep  { !/^\n\n\s+/ }
-            map   { s/^\s+<item>\s+//; $_ }
-            split /<\/item>/, $content;
-
-        wantarray ? @items : \@items;
-    }
-    else {
-        wantarray ? () : [];
-    }
-}
-
-sub parse_item {
-    local $_   = shift; # content
-    my $feed   = shift;
-    my %tokens = (
-        title   => 'title',
-        link    => 'link',
-        pubDate => 'date'
-    );
-
-    my %item = (feed => $feed);
-
-    for my $token (keys %tokens) {
-        /<$token>(.*)<\/$token>/s;
-        $item{$tokens{$token}} = $1;
-    }
-
-    \%item;
-}
-
 sub issue_dir {
     my ($item, $feed_dir) = @_;
     $feed_dir . '/' . $item->{date};
@@ -213,9 +206,9 @@ sub item_dir {
     my ($item) = @_;
     my $issue_dir = issue_dir $item, feed_dir($item->{feed});
 
-	$item->{dir} //= $issue_dir . '/' . item_file($item);
+    $item->{dir} //= $issue_dir . '/' . item_file($item);
 
-	$item->{dir}
+    $item->{dir}
 }
 
 sub item_file  {
