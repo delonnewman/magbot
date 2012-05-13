@@ -2,10 +2,12 @@
 use strict;
 use warnings;
 
+use HTTP::Tiny;
 use XML::LibXML;
+use Sys::Syslog qw{ :standard };
 use File::Basename;
 
-binmode STDOUT, ":utf8";
+binmode STDOUT, ':utf8';
 
 =pod
 
@@ -19,8 +21,14 @@ magbot - For fetching media from jw.org feeds
 
 =head1 DESCRIPTION
 
-For use on Android devices via SL4A (see http://code.google.com/p/android-scripting/)
-or via command line.
+For fetching media from jw.org from the command-line prints
+Gtk notifications, to standard output, and to Syslog.
+
+=head1 DEPENDENCIES
+
+    XML::LibXML
+    Gtk2::Notify (optional)
+    HTTP::Tiny
 
 =head1 AUTHOR
 
@@ -40,7 +48,7 @@ my $APP_NAME = 'MagBot';
 
 my $DIR = {
     audio => "$ENV{HOME}/Podcasts",
-    pub   => ["/media/NOOK/My Files/Magazines", "$ENV{HOME}/Reading"]
+    pub   => ['/media/NOOK/My Files/Magazines', "$ENV{HOME}/Reading"]
 };
 
 my %FORMATS = (
@@ -51,8 +59,23 @@ my %FORMATS = (
 );
     
 #
-# Some monkey business for cross-platformability
+# Some monkey business for versitile IO
 #
+
+# get content from HTTP
+sub get { HTTP::Tiny->new->get(@_)->{content} };
+    
+# get and store content from HTTP
+sub getstore {
+    my $url  = shift;
+    my $file = shift;
+
+    my $content = get $url;
+    open FILE, '>', $file or die "cannot open $file";
+    print FILE $file;
+    close FILE;
+}
+
 BEGIN {
     #
     # Print messages with Gtk2::Notify, to syslog, and to STDOUT
@@ -65,54 +88,17 @@ BEGIN {
         $gtk = 1;  
     };
 
-    my $syslog;
-    eval {
-        require Sys::Syslog
-        Sys::Syslog->import(qw{ :standard });
-        $syslog = 1;
-    };
-
     sub notify {
         if ( $gtk ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
         }
 
-        if ( $syslog ) {
-            openlog $APP_NAME, 'ndelay,pid', 'local0';
-            syslog 'info', @_;
-            closelog;
-        }
+        # syslog
+        openlog $APP_NAME, 'ndelay,pid', 'local0';
+        syslog 'info', @_;
+        closelog;
 
         print @_, "\n"
-    }
-
-    #
-    # Try loading LWP::Simple, otherwise use HTTP::Tiny
-    # to create work alikes for 'get' and 'getstore'
-    #
-    eval {
-        require LWP::Simple;
-        LWP::Simple->import;
-    };
-    if ( $@ ) {
-        require HTTP::Tiny;
-        HTTP::Tiny->import;
-    
-        no strict 'subs';
-        
-        *get = sub { HTTP::Tiny->new->get(@_)->{content} };
-    
-        *getstore = sub {
-            my $url  = shift;
-            my $file = shift;
-        
-            my $content = get $url;
-            open FILE, '>', $file or die "cannot open $file";
-            print FILE $file;
-            close FILE;
-        };
-    
-        use strict 'subs';
     }
 }
 
@@ -165,7 +151,6 @@ sub parse_feed {
     $feed{url}         = child $chan, tag  => 'atom:link', attr => 'href';
     $feed{items}       = items(\%feed, child($chan, tag => 'item'));
 
-    # TODO: remove this
     (my $pub, $feed{format}) = split ' ', $feed{description};
     $pub =~ /([a-z]+)([A-Z]+)/;
     ($feed{mag}, $feed{lang}) = ($1, $2);
@@ -225,6 +210,7 @@ sub item_file  {
 #
 # Top-Level Functions
 #
+
 sub download_feeds { map { get $_ } @_ }
 
 sub find_new {

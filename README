@@ -5,8 +5,13 @@ SYNOPSIS
         > magbot
 
 DESCRIPTION
-    For use on Android devices via SL4A (see
-    http://code.google.com/p/android-scripting/) or via command line.
+    For fetching media from jw.org from the command-line prints Gtk
+    notifications, to standard output, and to Syslog.
+
+DEPENDENCIES
+        XML::LibXML
+        Gtk2::Notify (optional)
+        HTTP::Tiny
 
 AUTHOR
     Delon Newman <delon.newman@gmail.com>
