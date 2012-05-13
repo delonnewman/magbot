@@ -76,20 +76,20 @@ sub parse_feed {
     ($feed{mag}, $feed{lang}) = ($1, $2);
 
     s/\s+<title>.*<\/itunes:block>//sg;
-	$feed{items} = parse_items($_, \%feed);
+    $feed{items} = parse_items($_, \%feed);
 
     \%feed;
 }
 
 sub feed_dir {
     my $feed = shift;
-	root_dir($feed) . '/' . $feed->{title};
+    root_dir($feed) . '/' . $feed->{title};
 }
 
 sub root_dir {
     my $feed = shift;
-	my $type = $FORMATS{$feed->{format}} ||
-		die 'cannot find root directory for: ', $feed->{format};
+    my $type = $FORMATS{$feed->{format}} ||
+        die 'cannot find root directory for: ', $feed->{format};
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -111,48 +111,48 @@ sub parse_items {
             map   { s/^\s+<item>\s+//; $_ }
             split /<\/item>/, $content;
 
-		wantarray ? @items : \@items;
-	}
-	else {
+        wantarray ? @items : \@items;
+    }
+    else {
         wantarray ? () : [];
     }
 }
 
 sub parse_item {
     local $_   = shift; # content
-	my $feed   = shift;
-	my %tokens = (
-		title   => 'title',
-		link    => 'link',
-		pubDate => 'date'
-	);
+    my $feed   = shift;
+    my %tokens = (
+        title   => 'title',
+        link    => 'link',
+        pubDate => 'date'
+    );
 
-	my %item = (feed => $feed);
+    my %item = (feed => $feed);
 
     for my $token (keys %tokens) {
         /<$token>(.*)<\/$token>/s;
         $item{$tokens{$token}} = $1;
     }
 
-	\%item;
+    \%item;
 }
 
 sub issue_dir {
     my ($item, $feed_dir) = @_;
-	$feed_dir . '/' . $item->{date};
+    $feed_dir . '/' . $item->{date};
 }
 
 sub item_dir {
     my ($item) = @_;
-	my $issue_dir = issue_dir($item, feed_dir($item->{feed}));
-	$issue_dir . '/' . item_file($item);
+    my $issue_dir = issue_dir($item, feed_dir($item->{feed}));
+    $issue_dir . '/' . item_file($item);
 }
 
 sub item_file  {
     my ($item) = @_;
 
-	# TODO: remove this
-	$item->{file} //= basename $item->{link} if $item->{link};
+    # TODO: remove this
+    $item->{file} //= basename $item->{link} if $item->{link};
 
     $item->{file};
 }
@@ -181,7 +181,7 @@ BEGIN {
         $gtk = 1;  
     };
 
-	use Sys::Syslog qw{ :standard };
+    use Sys::Syslog qw{ :standard };
 
     sub notify {
         if    ( $droid ) { $droid->notify($APP_NAME, @_) }
@@ -189,13 +189,13 @@ BEGIN {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
             print @_, "\n";
         }
-		else { print @_, "\n" }
+        else { print @_, "\n" }
 
-		# syslog
-		openlog $APP_NAME, 'ndelay,pid', 'local0';
-		syslog 'info', @_;
-		closelog;
-		1;
+        # syslog
+        openlog $APP_NAME, 'ndelay,pid', 'local0';
+        syslog 'info', @_;
+        closelog;
+        1;
     }
 
     #
@@ -238,7 +238,7 @@ sub download_feeds { map { get $_ } @_ }
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
-	map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
+    map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
 }
 
 sub download_media {
@@ -255,10 +255,10 @@ sub download_media {
     notify "Downloading ", int(@items), " items...\n";
     
     for my $item (@items) {
-		my $root_dir = root_dir $item->{feed};
+        my $root_dir = root_dir $item->{feed};
         mkdir $root_dir unless -e $root_dir;
 
-		my $feed_dir = feed_dir $item->{feed};
+        my $feed_dir = feed_dir $item->{feed};
         mkdir $feed_dir unless -e $feed_dir;
 
         my $issue_dir = issue_dir $item, $feed_dir;
@@ -266,13 +266,13 @@ sub download_media {
 
         my $path = item_dir $item;
         if ( -e $path ) {
-			print "  '", $item->{title}, "' exists at\n   --> '", $path, "'\n\n";
-		} elsif ( !$item->{link} ) {
+            print "  '", $item->{title}, "' exists at\n   --> '", $path, "'\n\n";
+        } elsif ( !$item->{link} ) {
             next;
         } else {
-			print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
+            print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
 
-			getstore $item->{link}, $path unless -e $path;
+            getstore $item->{link}, $path unless -e $path;
             print "  ok.\n\n";
         }
     }
@@ -309,9 +309,9 @@ sub gen_urls {
 # Now to the main event!!
 if ( __FILE__ eq $0 ) {
     my @urls =
-    	map { apply $_, @LANGUAGES }
-    	map { apply $_, @MAGS }
-    	map { gen_urls $_ } @FORMATS;
+        map { apply $_, @LANGUAGES }
+        map { apply $_, @MAGS }
+        map { gen_urls $_ } @FORMATS;
 
     download_media @urls;
 }
