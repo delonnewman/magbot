@@ -49,6 +49,76 @@ my %FORMATS = (
     PDF  => 'pub'
 );
     
+#
+# Some monkey business for cross-platformability
+#
+BEGIN {
+    #
+    # Try loading Android (from SL4A) and Gtk2::Notify, then create 
+    # notify function which sends a notification message on Android
+    # or GNOME or prints to STDOUT anywhere else
+    #
+    my $droid;
+    eval {
+        require Android;
+        Android->import;
+        $droid //= Android->new;
+    };
+
+    my $gtk;
+    eval {
+        require Gtk2::Notify;
+        Gtk2::Notify->import(-init, basename $0);
+        $gtk = 1;  
+    };
+
+    use Sys::Syslog qw{ :standard };
+
+    sub notify {
+        if    ( $droid ) { $droid->notify($APP_NAME, @_) }
+        elsif ( $gtk   ) {
+            Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
+            print @_, "\n";
+        }
+        else { print @_, "\n" }
+
+        # syslog
+        openlog $APP_NAME, 'ndelay,pid', 'local0';
+        syslog 'info', @_;
+        closelog;
+        1;
+    }
+
+    #
+    # Try loading LWP::Simple, otherwise use HTTP::Tiny
+    # to create work alikes for 'get' and 'getstore'
+    #
+    eval {
+        require LWP::Simple;
+        LWP::Simple->import;
+    };
+    if ( $@ ) {
+        require HTTP::Tiny;
+        HTTP::Tiny->import;
+    
+        no strict 'subs';
+        
+        *get = sub { HTTP::Tiny->new->get(@_)->{content} };
+    
+        *getstore = sub {
+            my $url  = shift;
+            my $file = shift;
+        
+            my $content = get $url;
+            open FILE, '>', $file or die "cannot open $file";
+            print FILE $file;
+            close FILE;
+        };
+    
+        use strict 'subs';
+    }
+}
+
 # These are for parsing the feeds.  Yes I know it's bad
 # to parse XML with regular expressions but I tried to do
 # it as clean as I could, _please_ forgive me. ;-)
@@ -145,90 +215,20 @@ sub issue_dir {
 sub item_dir {
     my ($item) = @_;
     my $issue_dir = issue_dir($item, feed_dir($item->{feed}));
-    $issue_dir . '/' . item_file($item);
+
+	$item->{dir} //= $issue_dir . '/' . item_file($item);
+
+	$item->{dir}
 }
 
 sub item_file  {
     my ($item) = @_;
 
-    # TODO: remove this
     $item->{file} //= basename $item->{link} if $item->{link};
 
     $item->{file};
 }
 
-
-#
-# Some monkey business for cross-platformability
-#
-BEGIN {
-    #
-    # Try loading Android (from SL4A) and Gtk2::Notify, then create 
-    # notify function which sends a notification message on Android
-    # or GNOME or prints to STDOUT anywhere else
-    #
-    my $droid;
-    eval {
-        require Android;
-        Android->import;
-        $droid //= Android->new;
-    };
-
-    my $gtk;
-    eval {
-        require Gtk2::Notify;
-        Gtk2::Notify->import(-init, basename $0);
-        $gtk = 1;  
-    };
-
-    use Sys::Syslog qw{ :standard };
-
-    sub notify {
-        if    ( $droid ) { $droid->notify($APP_NAME, @_) }
-        elsif ( $gtk   ) {
-            Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
-            print @_, "\n";
-        }
-        else { print @_, "\n" }
-
-        # syslog
-        openlog $APP_NAME, 'ndelay,pid', 'local0';
-        syslog 'info', @_;
-        closelog;
-        1;
-    }
-
-    #
-    # Try loading LWP::Simple, otherwise use HTTP::Tiny
-    # to create work alikes for 'get' and 'getstore'
-    #
-    eval {
-        require LWP::Simple;
-        LWP::Simple->import;
-    };
-    if ( $@ ) {
-        require HTTP::Tiny;
-        HTTP::Tiny->import;
-    
-        no strict 'subs';
-        
-        *get = sub { HTTP::Tiny->new->get(@_)->{content} };
-    
-        *getstore = sub {
-            my $url  = shift;
-            my $file = shift;
-        
-            my $content = get $url;
-            open FILE, '>', $file or die "cannot open $file";
-            print FILE $file;
-            close FILE;
-        };
-    
-        use strict 'subs';
-    }
-}
-
-use Data::Dump qw(dump);
 
 #
 # Top-Level Functions
@@ -246,7 +246,7 @@ sub download_media {
 
     notify "Downloading feeds and checking for new items...";
 
-    my @items = find_new map { parse_feed($_) } download_feeds @urls;
+    my @items = find_new map { parse_feed $_ } download_feeds @urls;
     if ( int(@items) == 0 ) {
         notify "There's nothing new in your feeds.";
         exit;
