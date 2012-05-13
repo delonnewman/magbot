@@ -54,17 +54,10 @@ my %FORMATS = (
 #
 BEGIN {
     #
-    # Try loading Android (from SL4A) and Gtk2::Notify, then create 
-    # notify function which sends a notification message on Android
-    # or GNOME or prints to STDOUT anywhere else
+	# Try loading Gtk2::Notify, then create notify function which
+	# sends a notification message or GNOME or prints to STDOUT
+	# anywhere else, also logs to syslog
     #
-    my $droid;
-    eval {
-        require Android;
-        Android->import;
-        $droid //= Android->new;
-    };
-
     my $gtk;
     eval {
         require Gtk2::Notify;
@@ -75,8 +68,7 @@ BEGIN {
     use Sys::Syslog qw{ :standard };
 
     sub notify {
-        if    ( $droid ) { $droid->notify($APP_NAME, @_) }
-        elsif ( $gtk   ) {
+        if ( $gtk ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
             print @_, "\n";
         }
