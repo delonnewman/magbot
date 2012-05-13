@@ -119,9 +119,11 @@ BEGIN {
     }
 }
 
+#
 # These are for parsing the feeds.  Yes I know it's bad
 # to parse XML with regular expressions but I tried to do
 # it as clean as I could, _please_ forgive me. ;-)
+#
 sub parse_feed {
     local $_     = shift; # content
     my    %feed  = ();
@@ -153,7 +155,10 @@ sub parse_feed {
 
 sub feed_dir {
     my $feed = shift;
-    root_dir($feed) . '/' . $feed->{title};
+
+	$feed->{dir} //= root_dir($feed) . '/' . $feed->{title};
+
+	$feed->{dir};
 }
 
 sub root_dir {
@@ -214,7 +219,7 @@ sub issue_dir {
 
 sub item_dir {
     my ($item) = @_;
-    my $issue_dir = issue_dir($item, feed_dir($item->{feed}));
+    my $issue_dir = issue_dir $item, feed_dir($item->{feed});
 
 	$item->{dir} //= $issue_dir . '/' . item_file($item);
 
@@ -280,7 +285,7 @@ sub download_media {
     notify "Okay the work is complete! ;-)";
 }
 
-# for readability, toOO many nested maps
+# applies codref to list entries; for readability, toOO many nested maps
 sub apply {
     my ($fn, @list) = @_;
     map { $fn->($_) } @list;
