@@ -5,4 +5,4 @@ NOOKDIR=/media/NOOK/My\ Files/Magazines/
 # wait for the mount
 sleep 2
 
-find $EPUBDIR -type f -exec cp {} $NOOKDIR \;
+find $EPUBDIR -type f -exec cp '{}' "$NOOKDIR" \;
