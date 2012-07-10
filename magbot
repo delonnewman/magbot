@@ -1,11 +1,14 @@
 #!/usr/bin/env perl
+use v5.10;
 use strict;
 use warnings;
 
+use YAML;
 use HTTP::Tiny;
 use XML::LibXML;
 use Sys::Syslog qw{ :standard };
 use File::Basename;
+use Data::Dump qw{ dump };
 
 binmode STDOUT, ':utf8';
 
@@ -26,6 +29,7 @@ Gtk notifications, to standard output, and to Syslog.
 
 =head1 DEPENDENCIES
 
+    YAML
     XML::LibXML
     Gtk2::Notify (optional)
     HTTP::Tiny
@@ -39,16 +43,17 @@ Delon Newman <delon.newman@gmail.com>
 #
 # Settings
 #
-my @FORMATS   = qw{ EPUB };
-my @LANGUAGES = qw{ E };
-my @MAGS      = qw{ w wp g };
 
-my $ROOT_URL = 'http://www.jw.org/index.xjp';
-my $APP_NAME = 'MagBot';
+my $APP_NAME  = 'MagBot';
+my $ROOT_URL  = 'http://www.jw.org/index.xjp';
+
+my @FORMATS   = config_or_defaults('formats');
+my @LANGUAGES = config_or_defaults('languages');
+my @MAGS      = config_or_defaults('mags');
 
 my $DIR = {
-    audio => "$ENV{HOME}/Podcasts",
-    pub   => "$ENV{HOME}/Reading"
+    audio => config_or_defaults(dir => 'audio'),
+    pub   => config_or_defaults(dir => 'pub')
 };
 
 my %FORMATS = (
@@ -57,26 +62,26 @@ my %FORMATS = (
     EPUB => 'pub',
     PDF  => 'pub'
 );
-    
-#
-# Some monkey business for IO
-#
-
-# get content from HTTP
-sub get { HTTP::Tiny->new->get(@_)->{content} };
-    
-# get and store content from HTTP to a file
-sub getstore {
-    my $url  = shift;
-    my $file = shift;
-
-    my $content = get $url;
-    open FILE, '>', $file or die "cannot open $file";
-    print FILE $file;
-    close FILE;
-}
 
 BEGIN {
+    #
+    # Constants
+    #
+    sub CONFIG_FILE () { "$ENV{HOME}/.magbot" }
+
+    # default configuration
+    sub DEFAULTS () {
+        {
+            formats   => [qw{ EPUB }],
+            languages => [qw{ E }],
+            mags      => [qw{ w wp g }],
+            dir       => {
+                audio  => "$ENV{HOME}/Podcasts",
+                pub    => "$ENV{HOME}/Reading"
+            }
+        };
+    }
+
     #
     # Print messages with Gtk2::Notify, to syslog, and to STDOUT
     # any of which are available.
@@ -100,6 +105,101 @@ BEGIN {
 
         print @_, "\n"
     }
+}
+
+
+#
+# Functions for accessing configuration
+#
+
+# read from configuration file or from defaults
+sub config_or_defaults {
+    if ( wantarray ) {
+        my $ref = config(@_) || defaults(@_);
+        if ( ref $ref eq 'HASH' || ref $ref eq 'ARRAY' ) { @{$ref} }
+        else                                             {   $ref  }
+    }
+    else {
+        config(@_) || defaults(@_);
+    }
+}
+
+# read from configuration file
+{
+    my $config;
+    sub config {
+        $config //= do {
+            my $f = CONFIG_FILE;
+            if ( -e $f && (my $yaml = YAML::LoadFile($f)) ) { $yaml }
+            else {
+                open my $fh, '>', $f or die "can't write to $f";
+                print $fh YAML::Dump(DEFAULTS);
+                close $fh;
+                YAML::LoadFile($f);
+            }
+        };
+    
+        if ( wantarray ) { @{read_config($config, @_)} }
+        else             {   read_config($config, @_) }
+    }
+}
+
+# read from defaults
+sub defaults { 
+    if ( wantarray ) { @{read_config(DEFAULTS, @_)} }
+    else             {   read_config(DEFAULTS, @_)  }
+}
+
+# read from configuration data structure
+sub read_config {
+    my ($config, @attrs) = @_;
+
+    if ( @attrs == 1 ) {
+        my $ref = $config->{$attrs[0]};
+        if ( wantarray ) {
+            if    ( ref $ref eq 'HASH' )  { %{$ref} }
+            elsif ( ref $ref eq 'ARRAY' ) { @{$ref} }
+            else                          { ($ref) }
+        }
+        else {
+            $ref
+        }
+    }
+    else {
+        read_config($config->{shift @attrs}, @attrs);
+    }
+}
+    
+
+#
+# Some monkey business for IO
+#
+
+# get content from HTTP
+sub get {
+    my $res;
+
+    eval {
+        $res = HTTP::Tiny->new->get(@_);
+    };
+
+    if ( $0 ) {
+        say "Error fetching ", @_, ': ', $@;
+        exit 0;
+    }
+
+    $res->{content};
+}
+    
+# get and store content from HTTP to a file
+sub getstore {
+    my $url  = shift;
+    my $file = shift;
+
+    my $content = get $url;
+    open FILE, '>', $file or die "cannot open $file";
+    print FILE $file;
+    close FILE;
 }
 
 #
