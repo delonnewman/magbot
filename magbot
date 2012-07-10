@@ -36,7 +36,19 @@ use HTTP::Tiny;
 use XML::LibXML;
 use Sys::Syslog qw{ :standard };
 use File::Basename;
-use Data::Dump qw{ dump };
+
+use constant CONFIG_FILE => "$ENV{HOME}/.magbot";
+use constant DEFAULTS => {
+    mags => {
+        w  => { E => [qw{ EPUB M4B }] },
+        wp => { E => [qw{ EPUB M4B }] },
+        g  => { E => [qw{ EPUB M4B }] }
+    },
+    dir => {
+        audio  => "$ENV{HOME}/Podcasts",
+        pub    => "$ENV{HOME}/Reading"
+    }
+};
 
 #
 # Settings
@@ -115,26 +127,6 @@ my %LANGUAGES = (
 
 BEGIN {
     #
-    # Constants
-    #
-    sub CONFIG_FILE () { "$ENV{HOME}/.magbot" }
-
-    # default configuration
-    sub DEFAULTS () {
-        {
-            mags => {
-                w  => { E => [qw{ EPUB M4B }] },
-                wp => { E => [qw{ EPUB M4B }] },
-                g  => { E => [qw{ EPUB M4B }] }
-            },
-            dir => {
-                audio  => "$ENV{HOME}/Podcasts",
-                pub    => "$ENV{HOME}/Reading"
-            }
-        };
-    }
-
-    #
     # Print messages with Gtk2::Notify, to syslog, and to STDOUT
     # any of which are available.
     #
@@ -175,11 +167,6 @@ BEGIN {
 
         print STDERR @_, "\n";
         exit 1;
-    }
-
-    sub pp {
-        my ($pre, @rest) = @_;
-        print $pre, dump(@rest), "\n";
     }
 }
 
@@ -421,7 +408,7 @@ sub find_new {
     map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
 }
 
-sub have_items {
+sub has_items {
     my ($feed) = @_;
 
     if ( $feed->{items} ) { 1 }
@@ -437,7 +424,7 @@ sub download_media {
     report_mags($mags);
     notify "Downloading feeds and checking for new items...";
 
-    my @items = find_new grep have_items($_), map parse_feed($_), download_feeds @urls;
+    my @items = find_new grep has_items($_), map parse_feed($_), download_feeds @urls;
 
     if ( @items == 0 ) {
         notify "There's nothing new in your feeds.";
@@ -525,7 +512,7 @@ sub eval_mags {
 
 # convert args '($mag, $lang, $format)' into valid
 # mag data structure that eval_mags expects, namely:
-# { $mag => { $lang => [ $formats ] }
+# '{ $mag => { $lang => [ $formats ] }'
 sub mag_from_args {
     my ($mag, $lang, $format) = @_;
 
@@ -537,9 +524,9 @@ sub mag_from_args {
         undef;
     }
     else {
-        notify "'$mag' is an invalid magazine"    unless grep $_ eq $mag, @mags;
-        notify "'$lang' is an invalid magazine"   unless grep $_ eq $lang, @langs;
-        notify "'$format' is an invalid magazine" unless grep $_ eq $format, @formats;
+        notify_fatal "'$mag' is an invalid magazine"  unless grep $_ eq $mag, @mags;
+        notify_fatal "'$lang' is an invalid language" unless grep $_ eq $lang, @langs;
+        notify_fatal "'$format' is an invalid format" unless grep $_ eq $format, @formats;
 
         return { $mag => { $lang => [ $format ] } };
     }
@@ -560,6 +547,10 @@ sub main {
     };
 
     download_media $mags, gen_urls($mags);
+
+    exit 0;
 }
 
 main(@ARGV) if __FILE__ eq $0;
+
+1;
