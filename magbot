@@ -488,25 +488,23 @@ sub report_mags {
 
 sub eval_mags {
     my ($mags, $fn) = @_;
-    
     my @mags = keys %$mags;
     
     map {
-        my $mag = $_;
-        
+        my $mag   = $_;
         my @langs = keys %{$mags->{$mag}};
 
         map {
-            my $lang = $_;
-
+            my $lang    = $_;
             my @formats = @{$mags->{$mag}->{$lang}};
             
             map {
                 my $format = $_;
-                
                 $fn->($mag, $lang, $format);
             } @formats
+
         } @langs
+
     } @mags
 }
 
