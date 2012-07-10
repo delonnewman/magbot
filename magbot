@@ -184,7 +184,8 @@ sub get {
     };
 
     if ( $0 ) {
-        say "Error fetching ", @_, ': ', $@;
+        notify "Can't download feed, exiting.";
+        say "Can't fetch '", @_, '\' ', $@;
         exit 0;
     }
 
