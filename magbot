@@ -112,11 +112,6 @@ my %LANGUAGES = (
     KO  => "íêµ­ì´", 
 );
 
-#
-# Function Dispatch
-#
-
-main(@ARGV);
 
 BEGIN {
     #
@@ -528,23 +523,9 @@ sub eval_mags {
     } @mags
 }
 
-# And now the main event!!
-sub main {
-    my @args = @_;
-
-    my $mags = do {
-        if ( @args ) {
-            if ( !(my $mag = mag_from_args(@args)) ) {
-                notify_fatal "Need to specify magazine, language, and format to download.";
-            }
-            else { $mag }
-        }
-        else { $MAGS }
-    };
-
-    download_media $mags, gen_urls($mags);
-}
-
+# convert args '($mag, $lang, $format)' into valid
+# mag data structure that eval_mags expects, namely:
+# { $mag => { $lang => [ $formats ] }
 sub mag_from_args {
     my ($mag, $lang, $format) = @_;
 
@@ -563,3 +544,22 @@ sub mag_from_args {
         return { $mag => { $lang => [ $format ] } };
     }
 }
+
+# And now the main event!!
+sub main {
+    my @args = @_;
+
+    my $mags = do {
+        if ( @args ) {
+            if ( !(my $mag = mag_from_args(@args)) ) {
+                notify_fatal "Need to specify magazine, language, and format to download.";
+            }
+            else { $mag }
+        }
+        else { $MAGS }
+    };
+
+    download_media $mags, gen_urls($mags);
+}
+
+main(@ARGV) if __FILE__ eq $0;
