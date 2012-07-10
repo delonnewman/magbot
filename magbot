@@ -8,7 +8,6 @@ use HTTP::Tiny;
 use XML::LibXML;
 use Sys::Syslog qw{ :standard };
 use File::Basename;
-use Data::Dump qw{ dump };
 
 binmode STDOUT, ':utf8';
 
@@ -117,7 +116,7 @@ sub config_or_defaults {
     if ( wantarray ) {
         my $ref = config(@_) || defaults(@_);
         if ( ref $ref eq 'HASH' || ref $ref eq 'ARRAY' ) { @{$ref} }
-        else                                             {   $ref  }
+        else                                             {  ($ref) }
     }
     else {
         config(@_) || defaults(@_);
@@ -159,7 +158,7 @@ sub read_config {
         if ( wantarray ) {
             if    ( ref $ref eq 'HASH' )  { %{$ref} }
             elsif ( ref $ref eq 'ARRAY' ) { @{$ref} }
-            else                          { ($ref) }
+            else                          {  ($ref) }
         }
         else {
             $ref
@@ -177,11 +176,7 @@ sub read_config {
 
 # get content from HTTP
 sub get {
-    my $res;
-
-    eval {
-        $res = HTTP::Tiny->new->get(@_);
-    };
+    my $res = eval { HTTP::Tiny->new->get(@_) };
 
     if ( $0 ) {
         notify "Can't download feed, exiting.";
@@ -206,11 +201,12 @@ sub getstore {
 #
 # For parsing feeds
 #
+
 sub parse_feed {
-    local $_ = shift; # content
+    my $xml  = shift; # content
     my %feed = ();
 
-    my $dom  = XML::LibXML->load_xml(string => $_);
+    my $dom  = XML::LibXML->load_xml(string => $xml);
     my $chan = $dom->getElementsByTagName('channel')->get_node(0);
 
     sub child {
@@ -223,8 +219,9 @@ sub parse_feed {
         if ( $nodes->size > 1 ) {
             my @elems = $nodes->get_nodelist;
             wantarray ? @elems : \@elems;
-        } else {
-            my $elem  = $nodes->get_node(0);
+        }
+        else {
+            my $elem = $nodes->get_node(0);
 
             if    ( $args{attr} ) { $elem->getAttribute($args{attr}) }
             elsif ( !@tags )      { $elem->textContent }
@@ -326,9 +323,10 @@ sub download_media {
     notify "Downloading feeds and checking for new items...";
 
     my @items = find_new map { parse_feed $_ } download_feeds @urls;
-    if ( int(@items) == 0 ) {
+
+    if ( @items == 0 ) {
         notify "There's nothing new in your feeds.";
-        exit;
+        exit 0;
     }
 
     notify "Downloading ", int(@items), " items...\n";
@@ -346,9 +344,11 @@ sub download_media {
         my $path = item_dir $item;
         if ( -e $path ) {
             print "  '", $item->{title}, "' exists at\n   --> '", $path, "'\n\n";
-        } elsif ( !$item->{link} ) {
+        }
+        elsif ( !$item->{link} ) {
             next;
-        } else {
+        }
+        else {
             print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
 
             getstore $item->{link}, $path unless -e $path;
