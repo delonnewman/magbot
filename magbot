@@ -3,15 +3,7 @@ use v5.10;
 use strict;
 use warnings;
 
-use YAML;
-use HTTP::Tiny;
-use XML::LibXML;
-use Sys::Syslog qw{ :standard };
-use File::Basename;
-
 binmode STDOUT, ':utf8';
-
-=pod
 
 =head1 NAME
 
@@ -39,28 +31,92 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
+use YAML;
+use HTTP::Tiny;
+use XML::LibXML;
+use Sys::Syslog qw{ :standard };
+use File::Basename;
+use Data::Dump qw{ dump };
+
 #
 # Settings
 #
 
+my $VERSION   = '0.6.0';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
+my $MAGS      = config_or_defaults('mags');
+my $DIR       = config_or_defaults('dir');
 
-my @FORMATS   = config_or_defaults('formats');
-my @LANGUAGES = config_or_defaults('languages');
-my @MAGS      = config_or_defaults('mags');
+# Valid mags, languages, formats
+my %MAGS = (
+    g  => 'Awake!',
+    w  => 'Watchtower',
+    wp => 'Watchtower (Public Edition)'
+);
 
-my $DIR = {
-    audio => config_or_defaults(dir => 'audio'),
-    pub   => config_or_defaults(dir => 'pub')
-};
-
+# map valid formats to basic 'type'
 my %FORMATS = (
     MP3  => 'audio',
     M4B  => 'audio',
+    AAC  => 'audio',
     EPUB => 'pub',
     PDF  => 'pub'
 );
+
+my %LANGUAGES = (
+    AP  => "Aymara", 
+    B   => "ÄeÅ¡tina", 
+    D   => "Dansk", 
+    X   => "Deutsch", 
+    ST  => "eesti", 
+    E   => "English", 
+    S   => "espaÃ±ol", 
+    F   => "FranÃ§ais", 
+    C   => "hrvatski", 
+    YW  => "Ikinyarwanda", 
+    IN  => "Indonesia", 
+    I   => "italiano", 
+    SW  => "Kiswahili", 
+    LT  => "LatvieÅ¡u", 
+    L   => "lietuviÅ³", 
+    H   => "magyar", 
+    MG  => "Malagasy", 
+    MT  => "Malti", 
+    O   => "Nederlands", 
+    N   => "Norsk", 
+    PA  => "Papiamentu (KÃ²rsou)", 
+    P   => "polski", 
+    T   => "PortuguÃªs", 
+    QUB => "Quechua (Bolivia)", 
+    M   => "RomÃ¢nÄ", 
+    AL  => "shqip", 
+    V   => "slovenÄina", 
+    SV  => "slovenÅ¡Äina", 
+    FI  => "Suomi", 
+    Z   => "Svenska", 
+    TK  => "TÃ¼rkÃ§e", 
+    G   => "ÎÎ»Î»Î·Î½Î¹ÎºÎ®", 
+    BL  => "Ð±ÑÐ»Ð³Ð°ÑÑÐºÐ¸", 
+    U   => "ÑÑÑÑÐºÐ¸Ð¹", 
+    SB  => "ÑÑÐ¿ÑÐºÐ¸", 
+    K   => "ÑÐºÑÐ°ÑÐ½ÑÑÐºÐ°", 
+    GE  => "á¥áá áá£áá", 
+    REA => "ÕÕ¡ÕµÕ¥ÖÕ¥Õ¶", 
+    TL  => "à®¤à®®à®¿à®´à¯", 
+    MY  => "à´®à´²à´¯à´¾à´³à´", 
+    SI  => "à¹à¸à¸¢", 
+    J   => "æ¥æ¬èª", 
+    CHS => "æ±è¯­ç®åå­", 
+    CH  => "æ¼¢èªç¹é«å­", 
+    KO  => "íêµ­ì´", 
+);
+
+#
+# Function Dispatch
+#
+
+main(@ARGV);
 
 BEGIN {
     #
@@ -71,10 +127,12 @@ BEGIN {
     # default configuration
     sub DEFAULTS () {
         {
-            formats   => [qw{ EPUB }],
-            languages => [qw{ E }],
-            mags      => [qw{ w wp g }],
-            dir       => {
+            mags => {
+                w  => { E => [qw{ EPUB M4B }] },
+                wp => { E => [qw{ EPUB M4B }] },
+                g  => { E => [qw{ EPUB M4B }] }
+            },
+            dir => {
                 audio  => "$ENV{HOME}/Podcasts",
                 pub    => "$ENV{HOME}/Reading"
             }
@@ -103,6 +161,30 @@ BEGIN {
         closelog;
 
         print @_, "\n"
+    }
+
+
+    #
+    # Error Reporting
+    #
+
+    sub notify_fatal {
+        if ( $gtk ) {
+            Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
+        }
+
+        # syslog
+        openlog $APP_NAME, 'ndelay,pid', 'local0';
+        syslog 'ERR', @_;
+        closelog;
+
+        print STDERR @_, "\n";
+        exit 1;
+    }
+
+    sub pp {
+        my ($pre, @rest) = @_;
+        print $pre, dump(@rest), "\n";
     }
 }
 
@@ -168,7 +250,7 @@ sub read_config {
         read_config($config->{shift @attrs}, @attrs);
     }
 }
-    
+
 
 #
 # Some monkey business for IO
@@ -178,7 +260,7 @@ sub read_config {
 sub get {
     my $res = eval { HTTP::Tiny->new->get(@_) };
 
-    if ( $0 ) {
+    if ( $@ ) {
         notify "Can't download feed, exiting.";
         say "Can't fetch '", @_, '\' ', $@;
         exit 0;
@@ -189,28 +271,50 @@ sub get {
     
 # get and store content from HTTP to a file
 sub getstore {
-    my $url  = shift;
-    my $file = shift;
+    my ($url, $file) = @_;
 
-    my $content = get $url;
-    open FILE, '>', $file or die "cannot open $file";
-    print FILE $file;
-    close FILE;
+    open my $fh, '>', $file or die "can't write to $file";
+    print $fh get($url);
 }
 
 #
 # For parsing feeds
 #
 
+#
+# Trys to always returns as much of a workable data structure as possible
+#
+#   $feed = {
+#       title       => '',
+#       description => '',
+#       language    => '',
+#       url         => '',
+#       image       => '',
+#       items       => [
+#           {
+#               title => '',
+#               link  => '',
+#               date  => '',
+#               feed  => \$feed,
+#           },
+#           ...
+#       ]
+#   }
+#
 sub parse_feed {
-    my $xml  = shift; # content
-    my %feed = ();
+    no warnings 'closure';
+
+    my ($xml) = @_; # content
+    my %feed  = ();
 
     my $dom  = XML::LibXML->load_xml(string => $xml);
     my $chan = $dom->getElementsByTagName('channel')->get_node(0);
+    
+    my @fatal_tags = qw{ item link title };
 
     sub child {
         my ($parent, %args) = @_;
+        
 
         my @tags  = @{$args{tags}} if $args{tags};
         my $tag   = $args{tag} // shift @tags;
@@ -220,17 +324,22 @@ sub parse_feed {
             my @elems = $nodes->get_nodelist;
             wantarray ? @elems : \@elems;
         }
-        else {
+        elsif ( $nodes->size == 1 ) {
             my $elem = $nodes->get_node(0);
 
             if    ( $args{attr} ) { $elem->getAttribute($args{attr}) }
             elsif ( !@tags )      { $elem->textContent }
             else                  { child($elem, tags => \@tags) }
         }
+        else {
+            undef;
+        }
     }
 
     sub items {
         my ($feed, @elems) = @_;
+
+        return undef if (@elems == 1 && grep !defined $_, @elems); 
 
         my @items = map {
           { title => child($_, tag => 'title'),
@@ -317,12 +426,23 @@ sub find_new {
     map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
 }
 
-sub download_media {
-    my @urls = @_;
+sub have_items {
+    my ($feed) = @_;
 
+    if ( $feed->{items} ) { 1 }
+    else {
+        notify "No items found for ", $feed->{title};
+        0;
+    }
+}
+
+sub download_media {
+    my ($mags, @urls) = @_;
+
+    report_mags($mags);
     notify "Downloading feeds and checking for new items...";
 
-    my @items = find_new map { parse_feed $_ } download_feeds @urls;
+    my @items = find_new grep have_items($_), map parse_feed($_), download_feeds @urls;
 
     if ( @items == 0 ) {
         notify "There's nothing new in your feeds.";
@@ -351,7 +471,7 @@ sub download_media {
         else {
             print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
 
-            getstore $item->{link}, $path unless -e $path;
+            getstore($item->{link}, $path) unless -e $path;
             print "  ok.\n\n";
         }
     }
@@ -359,38 +479,87 @@ sub download_media {
     notify "Okay the work is complete! ;-)";
 }
 
-# applies codref to list entries; for readability, toOO many nested maps
-sub apply {
-    my ($fn, @list) = @_;
-    map { $fn->($_) } @list;
-}
-
-# partially applied function to da FACE!!
+# Yaay!! Gen them URLs
 sub gen_urls {
-    my ($format) = @_;
+    my ($mags) = @_;
+    eval_mags($mags => sub {
+        my ($mag, $lang, $format) = @_;
 
-    my %types = (
-        audio => 'sFFZRQVNZNT',
-        pub   => 'sFFCsVrGZNT'
-    );
-    
-    my $type = $FORMATS{$format};
+        my %types = (
+            audio => 'sFFZRQVNZNT',
+            pub   => 'sFFCsVrGZNT'
+        );
 
-    sub {
-        my ($mag) = @_;
-        sub {
-            my ($lang) = @_;
-            "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
-        }
-    }
+        my $type = $FORMATS{$format};
+
+        "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
+    });
 }
 
-# Now to the main event!!
-if ( __FILE__ eq $0 ) {
-    my @urls =
-        map { apply $_, @LANGUAGES }
-        map { apply $_, @MAGS }
-        map { gen_urls $_ } @FORMATS;
+sub report_mags {
+    my ($mag) = @_;
+    eval_mags($mag => sub {
+        my ($m, $l, $f) = @_;
+        say "$LANGUAGES{$l} $MAGS{$m} in $f format";  
+    });
+}
 
-    download_media @urls;
+sub eval_mags {
+    my ($mags, $fn) = @_;
+    
+    my @mags = keys %$mags;
+    
+    map {
+        my $mag = $_;
+        
+        my @langs = keys %{$mags->{$mag}};
+
+        map {
+            my $lang = $_;
+
+            my @formats = @{$mags->{$mag}->{$lang}};
+            
+            map {
+                my $format = $_;
+                
+                $fn->($mag, $lang, $format);
+            } @formats
+        } @langs
+    } @mags
+}
+
+# And now the main event!!
+sub main {
+    my @args = @_;
+
+    my $mags = do {
+        if ( @args ) {
+            if ( !(my $mag = mag_from_args(@args)) ) {
+                notify_fatal "Need to specify magazine, language, and format to download.";
+            }
+            else { $mag }
+        }
+        else { $MAGS }
+    };
+
+    download_media $mags, gen_urls($mags);
+}
+
+sub mag_from_args {
+    my ($mag, $lang, $format) = @_;
+
+    my @formats = keys %FORMATS;
+    my @langs   = keys %LANGUAGES;
+    my @mags    = keys %MAGS;
+
+    if ( @_ < 3 ) {
+        undef;
+    }
+    else {
+        notify "'$mag' is an invalid magazine"    unless grep $_ eq $mag, @mags;
+        notify "'$lang' is an invalid magazine"   unless grep $_ eq $lang, @langs;
+        notify "'$format' is an invalid magazine" unless grep $_ eq $format, @formats;
+
+        return { $mag => { $lang => [ $format ] } };
+    }
 }
