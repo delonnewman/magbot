@@ -124,7 +124,7 @@
 .\" ========================================================================
 .\"
 .IX Title "MAGBOT 1"
-.TH MAGBOT 1 "2012-05-12" "perl v5.14.2" "MagBot"
+.TH MAGBOT 1 "2012-07-11" "perl v5.14.2" "MagBot"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -133,8 +133,18 @@
 magbot \- For fetching media from jw.org feeds
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-.Vb 1
+.Vb 2
 \&    > magbot
+\&    # downloads magazines as specified in the $HOME/.magbot configuration file
+\&
+\&    > magbot \-d
+\&    # starts in daemon mode and checks for new downloads each day
+\&
+\&    > magbot g E MP3
+\&    # downloads the current English Awake! magazines in MP3 format
+\&
+\&    > magbot w J PDF
+\&    # downloads the current Japanese Watchtower magazines in PDF format
 .Ve
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
@@ -142,7 +152,8 @@ For fetching media from jw.org from the command-line prints
 Gtk notifications, to standard output, and to Syslog.
 .SH "DEPENDENCIES"
 .IX Header "DEPENDENCIES"
-.Vb 3
+.Vb 4
+\&    YAML
 \&    XML::LibXML
 \&    Gtk2::Notify (optional)
 \&    HTTP::Tiny

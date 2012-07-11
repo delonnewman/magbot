@@ -12,6 +12,16 @@ magbot - For fetching media from jw.org feeds
 =head1 SYNOPSIS
 
     > magbot
+    # downloads magazines as specified in the $HOME/.magbot configuration file
+
+    > magbot -d
+    # starts in daemon mode and checks for new downloads each day
+
+    > magbot g E MP3
+    # downloads the current English Awake! magazines in MP3 format
+
+    > magbot w J PDF
+    # downloads the current Japanese Watchtower magazines in PDF format
 
 =head1 DESCRIPTION
 
