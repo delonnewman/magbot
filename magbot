@@ -31,7 +31,6 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
-use EV;
 use YAML;
 use HTTP::Tiny;
 use XML::LibXML;
@@ -39,6 +38,9 @@ use Getopt::Long;
 use File::Basename;
 use Data::Dump qw{ dump };
 use Sys::Syslog qw{ :standard };
+
+use AnyEvent;
+use AnyEvent::HTTP;
 
 use constant CONFIG_FILE => "$ENV{HOME}/.magbot";
 use constant DEFAULTS => {
@@ -53,10 +55,6 @@ use constant DEFAULTS => {
     }
 };
 
-GetOptions(
-    'daemonize|d' => sub { daemonize(60 * 60 * 24, @ARGV) }, # run daily
-    'help|h'      => \&help
-);
 
 #
 # Settings
@@ -246,6 +244,9 @@ sub read_config {
 # Some monkey business for IO
 #
 
+# TODO: Use AnyEvent::HTTP to get and store from HTTP asyncronosly.
+# see: https://metacpan.org/module/AnyEvent::HTTP#HTTP-1.1-FILE-DOWNLOAD
+
 # get content from HTTP
 sub get {
     my $res = eval { HTTP::Tiny->new->get(@_) };
@@ -258,7 +259,7 @@ sub get {
 
     $res->{content};
 }
-    
+
 # get and store content from HTTP to a file
 sub getstore {
     my ($url, $file) = @_;
@@ -270,9 +271,7 @@ sub getstore {
 #
 # For parsing feeds
 #
-
-#
-# Trys to always returns as much of a workable data structure as possible
+# trys to always returns as much of a workable data structure as possible
 #
 #   $feed = {
 #       title       => '',
@@ -427,21 +426,10 @@ sub has_items {
 }
 
 sub download_media {
-    my ($mags, @urls) = @_;
-
-    my @msgs = join "\n", eval_mags($mags => sub {
-        my ($m, $l, $f) = @_;
-        "  $LANGUAGES{$l} $MAGS{$m} in $f format";
-    });
-
-    notify "Dowloading feeds for:\n", @msgs, " and checking for new items...";
-
+    my @urls  = @_;
     my @items = find_new grep has_items($_), map parse_feed($_), download_feeds @urls;
 
-    if ( @items == 0 ) {
-        notify "There's nothing new in your feeds.";
-        exit 0;
-    }
+    notify_fatal "There's nothing new in your feeds." if @items == 0;
 
     notify "Downloading ", int(@items), " items...\n";
     
@@ -456,13 +444,7 @@ sub download_media {
         mkdir $issue_dir unless -e $issue_dir;
 
         my $path = item_dir $item;
-        if ( -e $path ) {
-            print "  '", $item->{title}, "' exists at\n   --> '", $path, "'\n\n";
-        }
-        elsif ( !$item->{link} ) {
-            next;
-        }
-        else {
+        if ( $item->{link} ) {
             print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
 
             getstore($item->{link}, $path) unless -e $path;
@@ -476,7 +458,7 @@ sub download_media {
 # Yaay!! Gen them URLs
 sub gen_urls {
     my ($mags) = @_;
-    eval_mags($mags => sub {
+    magmap($mags => sub {
         my ($mag, $lang, $format) = @_;
 
         my %types = (
@@ -490,15 +472,10 @@ sub gen_urls {
     });
 }
 
-sub report_mags {
-    my ($mag) = @_;
-    eval_mags($mag => sub {
-        my ($m, $l, $f) = @_;
-        say "Downloading feed for $LANGUAGES{$l} $MAGS{$m} in $f format";  
-    });
-}
-
-sub eval_mags {
+# a higer order function for creating lists composed of
+# magazine components ($mag, $language, and $format)
+# from magazine data structures
+sub magmap {
     my ($mags, $fn) = @_;
     my @mags = keys %$mags;
     
@@ -556,13 +533,21 @@ sub main {
         else { $MAGS }
     };
 
-    download_media $mags, gen_urls($mags);
+    my @msgs = join "\n", magmap($mags => sub {
+        my ($m, $l, $f) = @_;
+        "  $LANGUAGES{$l} $MAGS{$m} in $f format";
+    });
+
+    notify "Dowloading feeds for:\n", @msgs, " and checking for new items...\n";
+
+    download_media gen_urls($mags);
 }
 
 sub daemonize {
     my ($int, @args) = @_;
 
-    EV::periodic 0, $int, 0, sub {
+    say "Running as a daemon every $int seconds";
+    AE::timer 0, $int => sub {
         main(@args);
     };
 
@@ -571,6 +556,8 @@ sub daemonize {
 
 sub help {
     return <<HELP;
+$APP_NAME $VERSION
+
 Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
 
   Options:
@@ -591,7 +578,7 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
         specified magazine should be downloaded.
 
     FORMAT:
-        Used to indicate which file format to dowload the
+        Used to indicate which file format to download the
         magazine in.  Valid values are 'MP3', 'M4B', 'AAC',
         'EPUB', and 'PDF'.
 
@@ -613,11 +600,15 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
         # downloads the current Japanese Watchtower magazines
         # in PDF format
 HELP
-    exit 0;
 }
 
 
 if ( __FILE__ eq $0 ) {
+    GetOptions(
+        'daemonize|d' => sub { daemonize(60 * 60 * 24, @ARGV) }, # run daily
+        'help|h'      => sub { say help(); exit 0 }
+    );
+
     main(@ARGV);
     exit 0;
 }
