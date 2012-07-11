@@ -31,11 +31,14 @@ Delon Newman <delon.newman@gmail.com>
 
 =cut
 
+use EV;
 use YAML;
 use HTTP::Tiny;
 use XML::LibXML;
-use Sys::Syslog qw{ :standard };
+use Getopt::Long;
 use File::Basename;
+use Data::Dump qw{ dump };
+use Sys::Syslog qw{ :standard };
 
 use constant CONFIG_FILE => "$ENV{HOME}/.magbot";
 use constant DEFAULTS => {
@@ -49,6 +52,11 @@ use constant DEFAULTS => {
         pub    => "$ENV{HOME}/Reading"
     }
 };
+
+GetOptions(
+    'daemonize|d' => sub { daemonize(60 * 60 * 24, @ARGV) }, # run daily
+    'help|h'      => \&help
+);
 
 #
 # Settings
@@ -421,8 +429,12 @@ sub has_items {
 sub download_media {
     my ($mags, @urls) = @_;
 
-    report_mags($mags);
-    notify "Downloading feeds and checking for new items...";
+    my @msgs = join "\n", eval_mags($mags => sub {
+        my ($m, $l, $f) = @_;
+        "  $LANGUAGES{$l} $MAGS{$m} in $f format";
+    });
+
+    notify "Dowloading feeds for:\n", @msgs, " and checking for new items...";
 
     my @items = find_new grep has_items($_), map parse_feed($_), download_feeds @urls;
 
@@ -482,7 +494,7 @@ sub report_mags {
     my ($mag) = @_;
     eval_mags($mag => sub {
         my ($m, $l, $f) = @_;
-        say "$LANGUAGES{$l} $MAGS{$m} in $f format";  
+        say "Downloading feed for $LANGUAGES{$l} $MAGS{$m} in $f format";  
     });
 }
 
@@ -545,10 +557,69 @@ sub main {
     };
 
     download_media $mags, gen_urls($mags);
+}
+
+sub daemonize {
+    my ($int, @args) = @_;
+
+    EV::periodic 0, $int, 0, sub {
+        main(@args);
+    };
 
     exit 0;
 }
 
-main(@ARGV) if __FILE__ eq $0;
+sub help {
+    return <<HELP;
+Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
+
+  Options:
+    --daemonize, -d
+        run as a backgroud process daily
+
+    --help, -h
+        display this message
+
+  Other arguments
+    MAG CODE:
+        Used to indicate which magazine to download valid
+        values are 'w' (Watchtower), 'g' (Awake!), and 'wp'
+        (Watchtower - Public Edition).
+
+    LANGUAGE CODE:
+        Used to indicate which language edition of the
+        specified magazine should be downloaded.
+
+    FORMAT:
+        Used to indicate which file format to dowload the
+        magazine in.  Valid values are 'MP3', 'M4B', 'AAC',
+        'EPUB', and 'PDF'.
+
+   Examples:
+
+        > magbot
+        # downloads magazines as specified in \$HOME/.magbot
+        # configuration file
+
+        > magbot -d
+        # starts in daemon mode and checks for new downloads
+        # each day
+
+        > magbot g E MP3
+        # downloads the current English Awake! magazines in
+        # MP3 format
+
+        > magbot w J PDF
+        # downloads the current Japanese Watchtower magazines
+        # in PDF format
+HELP
+    exit 0;
+}
+
+
+if ( __FILE__ eq $0 ) {
+    main(@ARGV);
+    exit 0;
+}
 
 1;
