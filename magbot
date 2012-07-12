@@ -525,15 +525,15 @@ sub parse_date {
     # pad month with zero
     my $m = sub {
         local ($_) = @_;
-        if ( /\d{1,1}/ ) { "0$_" }
-        else             {   $_ }
+        if ( /\d{2,2}/ ) {   $_  }
+        else             { "0$_" }
     };
 
     # YYYY-MM
     if    ( /(\d\d\d\d)-(\d{1,2})/  ) { ($1, $m->($2)) }
 
     # MM/YYYY
-    elsif ( /(\d{1,2})\/(\d\d\d\d)/ ) { ($m->($2), $1) }
+    elsif ( /(\d{1,2})\/(\d\d\d\d)/ ) { ($2, $m->($1)) }
 
     # MM
     elsif ( /(\d{1,2})/             ) {
