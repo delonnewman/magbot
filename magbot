@@ -70,7 +70,7 @@ use constant DEFAULTS => {
 # Settings
 #
 
-my $VERSION   = '0.6.0';
+my $VERSION   = '0.6.1';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
 my $MAGS      = config_or_defaults('mags');
@@ -611,7 +611,9 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
 
   Options:
     --check, -c
-        check for new feed items, report and exit
+        check for new feed items as sepecified by arguments
+        or if none are present by configuration in
+        $ENV{HOME}/.magbot, report and exit
 
     --daemonize, -d
         run as a backgroud process daily
