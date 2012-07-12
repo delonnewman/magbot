@@ -1,2 +1,6 @@
 Read this article on libudev and sysfs:
 http://www.signal11.us/oss/udev/
+
+Notification on Windows:
+http://msdn.microsoft.com/en-us/library/bb774424(v=vs.85).aspx
+http://www.paralint.com/projects/notifu/index.html

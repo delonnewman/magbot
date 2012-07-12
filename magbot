@@ -301,16 +301,12 @@ sub getstore {
 #   }
 #
 sub parse_feed {
-    no warnings 'closure';
-
     my ($xml) = @_; # content
     my %feed  = ();
 
     my $dom  = XML::LibXML->load_xml(string => $xml);
     my $chan = $dom->getElementsByTagName('channel')->get_node(0);
     
-    my @fatal_tags = qw{ item link title };
-
     sub child {
         my ($parent, %args) = @_;
         
@@ -435,9 +431,16 @@ sub has_items {
     }
 }
 
-sub download_media {
+sub get_new_items {
     my @urls  = @_;
     my @items = find_new grep has_items($_), map parse_feed($_), download_feeds @urls;
+
+    wantarray ? @items : \@items;
+}
+
+sub download_media {
+    my @urls  = @_;
+    my @items = get_new_items @urls;
 
     notify_fatal "There's nothing new in your feeds." if @items == 0;
 
@@ -529,48 +532,87 @@ sub mag_from_args {
     }
 }
 
-# And now the main event!!
-sub main {
+sub get_mags {
     my @args = @_;
 
-    my $mags = do {
-        if ( @args ) {
-            if ( !(my $mag = mag_from_args(@args)) ) {
-                notify_fatal "Need to specify magazine, language, and format to download.";
-            }
-            else { $mag }
+    if ( @args ) {
+        if ( !(my $mag = mag_from_args(@args)) ) {
+            notify_fatal "Need to specify magazine, language, and format to download.";
         }
-        else { $MAGS }
-    };
+        else { $mag }
+    }
+    else { $MAGS }
+}
 
-    my @msgs = join "\n", magmap($mags => sub {
+sub report_mags {
+    my ($mags) = @_;
+
+    join "\n", magmap($mags => sub {
         my ($m, $l, $f) = @_;
         "  $LANGUAGES{$l} $MAGS{$m} in $f format";
     });
-
-    notify "Dowloading feeds for:\n", @msgs, " and checking for new items...\n";
-
-    download_media gen_urls($mags);
 }
 
-sub daemonize {
-    my ($int, @args) = @_;
+sub daemonize_or_run($$) {
+    my ($cond, $fn) = @_;
 
-    say "Running as a daemon every $int seconds";
-    AE::timer 0, $int => sub {
-        main(@args);
+    if ( $cond ) {
+        my $int = config_or_defaults('check-interval');
+        AE::timer 0, $int => sub {
+            $fn->();
+        };
+    }
+    else { $fn->() }
+}
+
+#
+# Commands
+#
+
+# And now the main event!!
+sub main {
+    my ($daemonize, @args) = @_;
+    my $mags = get_mags(@args);
+    my $rpt  = report_mags($mags);
+
+    daemonize_or_run $daemonize => sub {
+        notify "Checking for new items and downloading:\n", $rpt, "\n";
+        download_media gen_urls($mags);
     };
 
     exit 0;
 }
 
+sub check {
+    my ($daemonize, @args) = @_;
+    my $mags = get_mags(@args);
+    my $rpt  = report_mags($mags);
+
+    notify "Checking for new items:\n", $rpt, "\n";
+
+    daemonize_or_run $daemonize => sub {
+        my @items = get_new_items(gen_urls $mags);
+        if ( @items ) {
+            notify "New items:\n", join "\n", map { "  " . $_->{title} } @items;
+            exit 0;
+        }
+        else {
+            notify 'No new items found.';
+            exit 1;
+        }
+    };
+}
+
 sub help {
-    return <<HELP;
+    print <<HELP;
 $APP_NAME $VERSION
 
 Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
 
   Options:
+    --check, -c
+        check for new feed items, report and exit
+
     --daemonize, -d
         run as a backgroud process daily
 
@@ -591,36 +633,22 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
         Used to indicate which file format to download the
         magazine in.  Valid values are 'MP3', 'M4B', 'AAC',
         'EPUB', and 'PDF'.
-
-   Examples:
-
-        > magbot
-        # downloads magazines as specified in \$HOME/.magbot
-        # configuration file
-
-        > magbot -d
-        # starts in daemon mode and checks for new downloads
-        # each day
-
-        > magbot g E MP3
-        # downloads the current English Awake! magazines in
-        # MP3 format
-
-        > magbot w J PDF
-        # downloads the current Japanese Watchtower magazines
-        # in PDF format
 HELP
+
+    exit 0;
 }
 
 
 if ( __FILE__ eq $0 ) {
+    my $daemonize = 0;
+
     GetOptions(
-        'daemonize|d' => sub { daemonize(60 * 60 * 24, @ARGV) }, # run daily
-        'help|h'      => sub { say help(); exit 0 }
+        'daemonize|d' => sub { $daemonize = 1 }, # run daily
+        'help|h'      => sub { help() },
+        'check|c'     => sub { check($daemonize, @ARGV) }
     );
 
-    main(@ARGV);
-    exit 0;
+    main($daemonize, @ARGV);
 }
 
 1;
