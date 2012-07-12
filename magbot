@@ -17,6 +17,13 @@ magbot - For fetching media from jw.org feeds
     > magbot -d
     # starts in daemon mode and checks for new downloads each day
 
+    > magbot -c
+    # checks for new items in feeds in the $HOME/.magbot configuration file reports
+    # the results on the screen and exits
+
+    > magbot -c g E MP3
+    # checks the current English Awake! feed and exits
+
     > magbot g E MP3
     # downloads the current English Awake! magazines in MP3 format
 
@@ -45,9 +52,11 @@ use YAML;
 use HTTP::Tiny;
 use XML::LibXML;
 use Getopt::Long;
-use File::Basename;
 use Data::Dump qw{ dump };
 use Sys::Syslog qw{ :standard };
+
+use File::Spec;
+use File::Basename;
 
 use AnyEvent;
 use AnyEvent::HTTP;
@@ -73,6 +82,7 @@ use constant DEFAULTS => {
 my $VERSION   = '0.6.1';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
+my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
 my $MAGS      = config_or_defaults('mags');
 my $DIR       = config_or_defaults('dir');
 
@@ -83,6 +93,12 @@ my %MAGS = (
     wp => 'Watchtower (Public Edition)'
 );
 
+my %MAGS_DAYS = (
+    g  => '',
+    w  => '15',
+    wp => '01',
+);
+
 # map valid formats to basic 'type'
 my %FORMATS = (
     MP3  => 'audio',
@@ -90,6 +106,14 @@ my %FORMATS = (
     AAC  => 'audio',
     EPUB => 'pub',
     PDF  => 'pub'
+);
+
+my %FORMATS_EXTENSIONS = (
+    MP3  => 'mp3.zip',
+    M4B  => 'm4b',
+    AAC  => 'm4b',
+    EPUB => 'epub',
+    PDF  => 'pdf'
 );
 
 my %LANGUAGES = (
@@ -262,20 +286,25 @@ sub get {
     my $res = eval { HTTP::Tiny->new->get(@_) };
 
     if ( $@ ) {
-        notify "Can't download feed, exiting.";
         say "Can't fetch '", @_, '\' ', $@;
-        exit 0;
+        notify_fatal "Can't download feed, exiting.";
     }
 
-    $res->{content};
+    if ( $res->{content} =~ qr{File not found.} ) {
+        notify_fatal "When fetching ", @_, ":\n  ", $res->{content};
+    }
+    else {
+        $res->{content};
+    }
 }
 
 # get and store content from HTTP to a file
 sub getstore {
     my ($url, $file) = @_;
 
+    my $content = get($url); # allows to die before writing file
     open my $fh, '>', $file or die "can't write to $file";
-    print $fh get($url);
+    print $fh $content;
 }
 
 #
@@ -373,9 +402,14 @@ sub feed_dir {
 }
 
 sub root_dir {
-    my $feed = shift;
-    my $type = $FORMATS{$feed->{format}} ||
-        die 'cannot find root directory for: ', $feed->{format};
+    my $type = do {
+        my $arg = shift;
+        if ( $arg && ref $arg && $arg->{format} ) {
+            $FORMATS{$arg->{format}} //
+                die 'cannot find root directory for: ', $arg->{format};
+        }
+        else { $arg }
+    };
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -485,6 +519,42 @@ sub gen_urls {
     });
 }
 
+sub parse_date {
+    local ($_) = @_;
+
+    # pad month with zero
+    my $m = sub {
+        local ($_) = @_;
+        if ( /\d{1,1}/ ) { "0$_" }
+        else             {   $_ }
+    };
+
+    # YYYY-MM
+    if    ( /(\d\d\d\d)-(\d{1,2})/  ) { ($1, $m->($2)) }
+
+    # MM/YYYY
+    elsif ( /(\d{1,2})\/(\d\d\d\d)/ ) { ($m->($2), $1) }
+
+    # MM
+    elsif ( /(\d{1,2})/             ) {
+        my ($s, $min, $h, $d, $mon, $year) = localtime;
+        ($year + 1900, $m->($1))
+    }
+    else { @_ }
+}
+
+sub gen_file_url {
+    my ($mag, $lang, $format, $date) = @_;
+
+    my $ext = $FORMATS_EXTENSIONS{$format} //
+        notify_fatal "'$format' is not a valid format";
+
+    my ($year, $month) = parse_date($date);
+
+    "$FILE_URL/${mag}_${lang}_${year}${month}$MAGS_DAYS{$mag}.$ext";
+}
+
+
 # a higer order function for creating lists composed of
 # magazine components ($mag, $language, and $format)
 # from magazine data structures
@@ -572,12 +642,31 @@ sub daemonize_or_run($$) {
 # And now the main event!!
 sub main {
     my ($daemonize, @args) = @_;
-    my $mags = get_mags(@args);
-    my $rpt  = report_mags($mags);
 
     daemonize_or_run $daemonize => sub {
-        notify "Checking for new items and downloading:\n", $rpt, "\n";
-        download_media gen_urls($mags);
+        if ( @args < 4 ) {
+            my $mags = get_mags(@args);
+            my $rpt  = report_mags($mags);
+
+            notify "Checking for new items and downloading:\n", $rpt, "\n";
+            download_media gen_urls($mags);
+        }
+        else {
+            my $url  = gen_file_url(@args);
+            my $dir  = root_dir($FORMATS{$args[2]}); # second arg specifies format  
+            my $rpt  = report_mags(mag_from_args(@args));
+            my $path = File::Spec->join($dir, basename $url);
+
+            if ( -e $path ) { notify "$path already exists." }
+            else {
+                notify "Downloading:\n", $rpt,
+                       "\n    from: ", $url,
+                       "\n    to: ", $path, "\n";
+
+                getstore($url => $path);
+                notify "download complete :-)";
+            }
+        }
     };
 
     exit 0;

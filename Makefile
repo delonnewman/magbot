@@ -32,8 +32,8 @@ install: install-deps
 	cp $(RULE) $(UDEV)
 
 install-deps:
-	$(PKG_BIN) $(SYS_DEPS)
-	$(CPAN_BIN) $(PERL_DEPS)
+	#$(PKG_BIN) $(SYS_DEPS)
+	#$(CPAN_BIN) $(PERL_DEPS)
 
 uninstall:
 	rm $(DIR)/$(BIN)
