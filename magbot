@@ -79,7 +79,7 @@ use constant DEFAULTS => {
 # Settings
 #
 
-my $VERSION   = '0.6.1';
+my $VERSION   = '0.6.2';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
 my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
