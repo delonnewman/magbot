@@ -456,14 +456,15 @@ sub feed_dir {
 }
 
 sub root_dir {
+    my $arg = shift;
     my $type = do {
-        my $arg = shift;
         if ( $arg && ref $arg && $arg->{format} ) {
-            $FORMATS{$arg->{format}} //
-                die 'cannot find root directory for: ', $arg->{format};
+            $FORMATS{$arg->{format}};
         }
-        else { $FORMATS{$arg} }
-    };
+        else {
+            $FORMATS{$arg};
+        }
+    } // die 'cannot find root directory for: ', $arg;
 
     if ( ref $DIR eq 'HASH' ) {
         if ( ref $DIR->{$type} eq 'ARRAY' ) {
@@ -600,14 +601,21 @@ sub parse_date {
 }
 
 sub gen_file_url {
-    my ($mag, $lang, $format, $date) = @_;
+    my ($m) = @_;
 
-    my $ext = $FORMATS_EXTENSIONS{$format} //
-        notify_fatal "'$format' is not a valid format";
+    my $ext = $FORMATS_EXTENSIONS{$m->{format}} //
+    notify_fatal "'", $m->{format}, "' is not a valid format";
 
-    my ($year, $month) = parse_date($date);
+    my ($year, $month) = parse_date($m->{date});
 
-    "$FILE_URL/${mag}_${lang}_${year}${month}$MAGS_DAYS{$mag}.$ext";
+    sprintf "%s/%s_%s_%s%s%s.%s",
+            $FILE_URL,
+            $m->{mag},
+            $m->{lang},
+            $year,
+            $month,
+            $MAGS_DAYS{$m->{mag}},
+            $ext;
 }
 
 
@@ -669,10 +677,8 @@ sub mags_from_config {
 # mag data structure that eval_mags expects, namely:
 # '{ $mag => { $lang => [ $formats ] }'
 sub mags_from_args {
-    my ($mag, $lang, $format) = @_;
-
     if ( @_ < 3 ) { undef }
-    else          { (Mag($mag, $lang, $format)) }
+    else          { (Mag(@_)) }
 }
 
 sub get_mags {
@@ -725,9 +731,10 @@ sub main {
             download_media gen_urls(@mags);
         }
         else {
-            my $url  = gen_file_url(@args);
-            my $dir  = root_dir($FORMATS{$args[2]}); # second arg specifies format  
-            my $rpt  = report_mags(mag_from_args(@args));
+            my $mag  = Mag(@args);
+            my $url  = gen_file_url($mag);
+            my $dir  = root_dir($mag->{format});
+            my $rpt  = report_mags($mag);
             my $path = File::Spec->join($dir, basename $url);
 
             if ( -e $path ) { notify "$path already exists." }
