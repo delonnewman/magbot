@@ -332,6 +332,36 @@ sub getstore {
 #
 # For parsing feeds
 #
+
+# Feed constructor
+sub Feed {
+    my %feed = @_;
+    
+    $feed{title} // die "title is required";
+    $feed{url}   // die "date is required";
+    $feed{items} // die "feed is required";
+
+    bless \%feed, 'Feed';
+}
+
+# Item constructor
+sub Item {
+    my %item = @_;
+
+    $item{link}  // die "link is required";
+    $item{title} // die "title is required";
+    $item{date}  // die "date is required";
+    $item{feed}  // die "feed is required";
+
+    $item{format} = do {
+        my ($f, $ext) = split(/\./, basename $item{link});
+        my ($format)  = grep { $FORMATS_EXTENSIONS{$_} eq $ext } keys %FORMATS_EXTENSIONS;
+        $format;
+    };
+
+    bless \%item, 'Item';
+}
+
 # trys to always returns as much of a workable data structure as possible
 #
 #   $feed = {
@@ -352,7 +382,7 @@ sub getstore {
 #   }
 #
 sub parse_feed {
-    my ($xml) = @_; # content
+    my ($xml) = @_;
     my %feed  = ();
 
     my $dom  = XML::LibXML->load_xml(string => $xml);
@@ -361,7 +391,6 @@ sub parse_feed {
     sub child {
         my ($parent, %args) = @_;
         
-
         my @tags  = @{$args{tags}} if $args{tags};
         my $tag   = $args{tag} // shift @tags;
         my $nodes = $parent->getChildrenByTagName($tag);
@@ -388,10 +417,10 @@ sub parse_feed {
         return undef if (@elems == 1 && grep !defined $_, @elems); 
 
         my @items = map {
-          { title => child($_, tag => 'title'),
-            link  => child($_, tag => 'link'),
-            date  => child($_, tag => 'pubDate'),
-            feed  => $feed }
+          Item(title => child($_, tag => 'title'),
+               link  => child($_, tag => 'link'),
+               date  => child($_, tag => 'pubDate'),
+               feed  => $feed);
         } @elems;
 
         \@items;
@@ -408,7 +437,7 @@ sub parse_feed {
     $pub =~ /([a-z]+)([A-Z]+)/;
     ($feed{mag}, $feed{lang}) = ($1, $2);
 
-    \%feed;
+    Feed(%feed);
 }
 
 #
@@ -433,7 +462,7 @@ sub root_dir {
             $FORMATS{$arg->{format}} //
                 die 'cannot find root directory for: ', $arg->{format};
         }
-        else { $arg }
+        else { $FORMATS{$arg} }
     };
 
     if ( ref $DIR eq 'HASH' ) {
@@ -508,7 +537,7 @@ sub download_media {
     notify "Downloading ", int(@items), " items...\n";
     
     for my $item (@items) {
-        my $root_dir = root_dir $item->{feed};
+        my $root_dir = root_dir $item->{format};
         mkdir $root_dir unless -e $root_dir;
 
         my $feed_dir = feed_dir $item->{feed};
@@ -531,9 +560,9 @@ sub download_media {
 
 # Yaay!! Gen them URLs
 sub gen_urls {
-    my ($mags) = @_;
-    magmap($mags => sub {
-        my ($mag, $lang, $format) = @_;
+    my (@mags) = @_;
+    map {
+        my ($mag, $lang, $format) = ($_->{mag}, $_->{lang}, $_->{format});
 
         my %types = (
             audio => 'sFFZRQVNZNT',
@@ -543,7 +572,7 @@ sub gen_urls {
         my $type = $FORMATS{$format};
 
         "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
-    });
+    } @mags;
 }
 
 sub parse_date {
@@ -585,7 +614,7 @@ sub gen_file_url {
 # a higer order function for creating lists composed of
 # magazine components ($mag, $language, and $format)
 # from magazine data structures
-sub magmap {
+sub magmap($$) {
     my ($mags, $fn) = @_;
     my @mags = keys %$mags;
     
@@ -607,47 +636,64 @@ sub magmap {
     } @mags
 }
 
-# convert args '($mag, $lang, $format)' into valid
-# mag data structure that eval_mags expects, namely:
-# '{ $mag => { $lang => [ $formats ] }'
-sub mag_from_args {
-    my ($mag, $lang, $format) = @_;
+# Mag constructor
+sub Mag {
+    my ($mag, $lang, $format, $date) = @_;
 
     my @formats = keys %FORMATS;
     my @langs   = keys %LANGUAGES;
     my @mags    = keys %MAGS;
 
-    if ( @_ < 3 ) {
-        undef;
-    }
-    else {
-        notify_fatal "'$mag' is an invalid magazine"  unless grep $_ eq $mag, @mags;
-        notify_fatal "'$lang' is an invalid language" unless grep $_ eq $lang, @langs;
-        notify_fatal "'$format' is an invalid format" unless grep $_ eq $format, @formats;
+    $mag // die "mag code is required";
+    die "'$mag' is an invalid magazine"  unless grep $_ eq $mag, @mags;
 
-        return { $mag => { $lang => [ $format ] } };
-    }
+    $lang // die "lang is required";
+    die "'$lang' is an invalid language" unless grep $_ eq $lang, @langs;
+
+    $format // die "foramat is required";
+    die "'$format' is an invalid format" unless grep $_ eq $format, @formats;
+
+    bless { mag    => $mag, 
+            lang   => $lang,
+            format => $format,
+            date   => $date }, 'Mag';
+}
+
+sub mags_from_config {
+    my ($config) = @_;
+    
+    magmap $config => sub { Mag(@_) };
+}
+
+# convert args '($mag, $lang, $format)' into valid
+# mag data structure that eval_mags expects, namely:
+# '{ $mag => { $lang => [ $formats ] }'
+sub mags_from_args {
+    my ($mag, $lang, $format) = @_;
+
+    if ( @_ < 3 ) { undef }
+    else          { (Mag($mag, $lang, $format)) }
 }
 
 sub get_mags {
     my @args = @_;
 
     if ( @args ) {
-        if ( !(my $mag = mag_from_args(@args)) ) {
+        if ( !(my @mags = mags_from_args(@args)) ) {
             notify_fatal "Need to specify magazine, language, and format to download.";
         }
-        else { $mag }
+        else { @mags }
     }
-    else { $MAGS }
+    else { mags_from_config($MAGS) }
 }
 
 sub report_mags {
-    my ($mags) = @_;
+    my (@mags) = @_;
 
-    join "\n", magmap($mags => sub {
-        my ($m, $l, $f) = @_;
+    join "\n", map {
+        my ($m, $l, $f) = ($_->{mag}, $_->{lang}, $_->{format});
         "  $LANGUAGES{$l} $MAGS{$m} in $f format";
-    });
+    } @mags
 }
 
 sub daemonize_or_run($$) {
@@ -672,11 +718,11 @@ sub main {
 
     daemonize_or_run $daemonize => sub {
         if ( @args < 4 ) {
-            my $mags = get_mags(@args);
-            my $rpt  = report_mags($mags);
+            my @mags = get_mags(@args);
+            my $rpt  = report_mags(@mags);
 
             notify "Checking for new items and downloading:\n", $rpt, "\n";
-            download_media gen_urls($mags);
+            download_media gen_urls(@mags);
         }
         else {
             my $url  = gen_file_url(@args);
@@ -701,13 +747,13 @@ sub main {
 
 sub check {
     my ($daemonize, @args) = @_;
-    my $mags = get_mags(@args);
-    my $rpt  = report_mags($mags);
+    my @mags = get_mags(@args);
+    my $rpt  = report_mags(@mags);
 
     notify "Checking for new items:\n", $rpt, "\n";
 
     daemonize_or_run $daemonize => sub {
-        my @items = get_new_items(gen_urls $mags);
+        my @items = get_new_items(gen_urls @mags);
         if ( @items ) {
             notify "New items:\n", join "\n", map { "  " . $_->{title} } @items;
             exit 0;
