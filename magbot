@@ -208,13 +208,15 @@ BEGIN {
 
         $str;
     }
+
 }
 
 #
 # Constants
 #
 use constant HOME        => $^O =~ /win32/i ? "$ENV{HOMEDRIVE}\\$ENV{HOMEPATH}" : $ENV{HOME};
-use constant CONFIG_FILE => path(HOME, '.magbot');
+use constant CONFIG_FILE => path(HOME, '.magbot' => 'config');
+use constant LOG_FILE    => path(HOME, '.magbot' => 'log');
 use constant DEFAULTS    => {
     mags => {
         w  => { E => [qw{ EPUB M4B }] },
@@ -226,6 +228,12 @@ use constant DEFAULTS    => {
         pub    => path(HOME, 'Reading')
     }
 };
+
+sub log {
+    open my $l, '>>', LOG_FILE or
+        die "Can't append to file ", LOG_FILE, ": $!";
+    say $l @_;
+}
 
 #
 # Functions for accessing configuration
@@ -248,6 +256,8 @@ sub config_or_defaults {
     my $config;
     sub config {
         $config //= do {
+            my $dir = dirname CONFIG_FILE;
+            mkdir $dir unless -e $dir;
             my $f = CONFIG_FILE;
             if ( -e $f && (my $yaml = YAML::LoadFile($f)) ) { $yaml }
             else {
@@ -426,7 +436,8 @@ sub parse_feed {
 
     (my $pub, $feed{format}) = split ' ', $feed{description};
     $pub =~ /([a-z]+)([A-Z]+)/;
-    ($feed{mag}, $feed{lang}) = ($1, $2);
+    ($feed{mag_code}, $feed{lang}) = ($1, $2);
+    $feed{mag} = Mag($feed{mag_code}, $feed{lang}, $feed{format});
 
     Feed(%feed);
 }
@@ -502,7 +513,7 @@ sub download_feeds($$) {
     my @threads = map {
         my $t = threads->create(sub {
             threads->detach;
-            dump $_;
+            &log(dump $_);
             $fn->(get $_);
             thread->exit;
         });
@@ -553,7 +564,7 @@ sub get_new_items($$) {
         my $feed = parse_feed($content);
         if ( has_items $feed ) {
             my @items = find_new $feed;
-            $fn->(@items);
+            $fn->($feed->{mag}, @items);
         }
     };
 }
@@ -782,13 +793,14 @@ sub check {
     my @mags = get_mags(@args);
     my $rpt  = report_mags(@mags);
 
-    notify "Checking for new items:\n", $rpt, "\n";
+    notify "Checking for new items...\n", $rpt, "\n";
 
     daemonize_or_run $daemonize => sub {
         get_new_items [gen_urls @mags] => sub {
-            my @items = @_;
+            my ($mag, @items) = @_;
             if ( @items ) {
-                notify "New items:\n", join "\n", map { "  " . $_->{title} } @items;
+                notify report_mags($mag), ":\n",
+                       join "\n", map { "     " . $_->{title} } @items;
                 exit 0;
             }
             else {
