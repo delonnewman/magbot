@@ -770,5 +770,3 @@ if ( __FILE__ eq $0 ) {
 }
 
 1;
-
-# vim: set ft=perl, set encoding=utf-8
