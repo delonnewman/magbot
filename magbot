@@ -518,13 +518,12 @@ sub doeach($$) {
         threads->create(sub {
             my ($url, $fn, @args) = @_;
             $fn->($url, @args);
-    	threads->exit;
+    	    threads->exit;
         }, @_);
     }
 
     sub worker {
         my ($fn, $q, @args) = @_;
-
         my $kid;
         while ( my $url = $q->dequeue ) {
             $kid = download $url => $fn, @args;
@@ -533,10 +532,16 @@ sub doeach($$) {
 
 	if ( threads->list > 1 ) {
             my @threads = threads->list;
-	    for my $t (@threads) {
-		if ( $t->tid == threads->tid ) { next }
-	        if ( $t->is_running ) { $t->join }
-		else                  { $t->detach }
+	    for my $t (threads->list) {
+		next if  $t->tid == threads->tid;
+		next if  $t->is_detached;
+
+		eval {
+		    $t->join;
+		};
+		if ( $@ ) {
+		    &log($@);
+		}
             }
 	}
     }
