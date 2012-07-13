@@ -572,8 +572,8 @@ sub get_new_items($$) {
 sub download_media {
     my @urls    = @_;
     my @threads = get_new_items [@urls] => sub {
-        my @items = @_;
-        notify_fatal "There's nothing new in your feeds." if @items == 0;
+        my ($mag, @items) = @_;
+        notify_fatal "There's nothing new for: ", report_mags($mag) if @items == 0;
     
         notify "Downloading ", int(@items), " items...\n";
         
@@ -791,20 +791,21 @@ sub main {
 sub check {
     my ($daemonize, @args) = @_;
     my @mags = get_mags(@args);
-    my $rpt  = report_mags(@mags);
 
-    notify "Checking for new items...\n", $rpt, "\n";
+    notify "Checking for new items...";
 
     daemonize_or_run $daemonize => sub {
         get_new_items [gen_urls @mags] => sub {
             my ($mag, @items) = @_;
             if ( @items ) {
                 notify report_mags($mag), ":\n",
-                       join "\n", map { "     " . $_->{title} } @items;
+                       join "\n", map { " " x 4 . $_->{title} } @items;
                 exit 0;
             }
             else {
-                notify 'No new items found.';
+                notify report_mags($mag), ":\n",
+                       " " x 4,
+                       "No new items found.\n";
                 exit 1;
             }
         };
