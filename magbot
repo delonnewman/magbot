@@ -509,30 +509,32 @@ sub item_file  {
 use threads;
 sub download_feeds($$) {
     my ($urls, $fn) = @_;
+    
+    &log(dump $urls);
 
-    my @threads = map {
-        my $t = threads->create(sub {
-            threads->detach;
-            &log(dump $_);
-            $fn->(get $_);
-            thread->exit;
-        });
+    my $watcher = threads->create(sub {
+        my @threads = map {
+            my $t = threads->create(sub {
+                threads->detach;
+                &log(dump $_);
+                $fn->(get $_);
+                thread->exit;
+            });
 
-        if ( my $err = $t->error ) {
-            warn "Thread error: $err\n";
-        }
+            if ( my $err = $t->error ) {
+                warn "Thread error: $err\n";
+            }
 
-        $t;
-    } @$urls;
+            $t;
+        } @$urls;
 
-    my $watcher = thread->create(sub {
-        for my $t ( thread->list ) {
+        for my $t ( threads->list ) {
             sleep 1;
             if ( $t->is_running ) {
-                $t->join if thread->list == 1;
+                $t->join if threads->list == 1;
             }
         }
-        thread->exit;
+        threads->exit;
     });
 }
 
@@ -804,8 +806,7 @@ sub check {
             }
             else {
                 notify report_mags($mag), ":\n",
-                       " " x 4,
-                       "No new items found.\n";
+                       " " x 4, "No new items found.\n";
                 exit 1;
             }
         };
