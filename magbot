@@ -591,15 +591,21 @@ sub get_new_items($$) {
 
 sub download_media {
     my @urls = @_;
-    my @threads = get_new_items [@urls] => sub {
+
+    get_new_items [@urls] => sub {
         my ($mag, @items) = @_;
 
-        notify_fatal "There's nothing new for:\n", report_mags($mag) if @items == 0;
-    
-        notify "Downloading ", int(@items), " items...\n";
+        if ( @items == 0 ) {
+            notify_fatal report_mags($mag), "\n", ' ' x 4, "No new items found.\n";
+        }
+        else {
+            notify report_mags($mag),
+                   "\n", ' ' x 4,
+                   int(@items), " items found.\n";
+        }
         
        	doeach [@items] => sub {
-	    my ($item) = @_;
+	        my ($item) = @_;
             my $root_dir = root_dir $item->{format};
             mkdir $root_dir unless -e $root_dir;
     
@@ -612,8 +618,7 @@ sub download_media {
             my $path = item_dir $item;
             if ( $item->{link} ) {
                 getstore($item->{link}, $path) unless -e $path;
-                print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
-                print "  ok.\n\n";
+                print "  OK - downloaded '", $item->{title}, "' to \n  --> ", $path, "\n";
             }
         };
     };
