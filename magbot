@@ -30,6 +30,9 @@ magbot - For fetching media from jw.org feeds
     > magbot w J PDF
     # downloads the current Japanese Watchtower magazines in PDF format
 
+    > magbot w AL PDF 2012-08
+    # downloads August 2012 Albanian Watchtower magazine in PDF format
+
 =head1 DESCRIPTION
 
 For fetching media from jw.org from the command-line prints
@@ -41,6 +44,8 @@ Gtk notifications, to standard output, and to Syslog.
     XML::LibXML
     Gtk2::Notify (optional)
     HTTP::Tiny
+    AnyEvent
+    AnyEvent::HTTP
 
 =head1 AUTHOR
 
@@ -53,26 +58,12 @@ use HTTP::Tiny;
 use XML::LibXML;
 use Getopt::Long;
 use Data::Dump qw{ dump };
-use Sys::Syslog qw{ :standard };
 
 use File::Spec;
 use File::Basename;
 
 use AnyEvent;
 use AnyEvent::HTTP;
-
-use constant CONFIG_FILE => "$ENV{HOME}/.magbot";
-use constant DEFAULTS => {
-    mags => {
-        w  => { E => [qw{ EPUB M4B }] },
-        wp => { E => [qw{ EPUB M4B }] },
-        g  => { E => [qw{ EPUB M4B }] }
-    },
-    dir => {
-        audio  => "$ENV{HOME}/Podcasts",
-        pub    => "$ENV{HOME}/Reading"
-    }
-};
 
 
 #
@@ -117,54 +108,55 @@ my %FORMATS_EXTENSIONS = (
 );
 
 my %LANGUAGES = (
-    AP  => "Aymara", 
-    B   => "ÄeÅ¡tina", 
-    D   => "Dansk", 
-    X   => "Deutsch", 
-    ST  => "eesti", 
-    E   => "English", 
-    S   => "espaÃ±ol", 
-    F   => "FranÃ§ais", 
-    C   => "hrvatski", 
-    YW  => "Ikinyarwanda", 
-    IN  => "Indonesia", 
-    I   => "italiano", 
-    SW  => "Kiswahili", 
-    LT  => "LatvieÅ¡u", 
-    L   => "lietuviÅ³", 
-    H   => "magyar", 
-    MG  => "Malagasy", 
-    MT  => "Malti", 
-    O   => "Nederlands", 
-    N   => "Norsk", 
-    PA  => "Papiamentu (KÃ²rsou)", 
-    P   => "polski", 
-    T   => "PortuguÃªs", 
-    QUB => "Quechua (Bolivia)", 
-    M   => "RomÃ¢nÄ", 
-    AL  => "shqip", 
-    V   => "slovenÄina", 
-    SV  => "slovenÅ¡Äina", 
-    FI  => "Suomi", 
-    Z   => "Svenska", 
-    TK  => "TÃ¼rkÃ§e", 
-    G   => "ÎÎ»Î»Î·Î½Î¹ÎºÎ®", 
-    BL  => "Ð±ÑÐ»Ð³Ð°ÑÑÐºÐ¸", 
-    U   => "ÑÑÑÑÐºÐ¸Ð¹", 
-    SB  => "ÑÑÐ¿ÑÐºÐ¸", 
-    K   => "ÑÐºÑÐ°ÑÐ½ÑÑÐºÐ°", 
-    GE  => "á¥áá áá£áá", 
-    REA => "ÕÕ¡ÕµÕ¥ÖÕ¥Õ¶", 
-    TL  => "à®¤à®®à®¿à®´à¯", 
-    MY  => "à´®à´²à´¯à´¾à´³à´", 
-    SI  => "à¹à¸à¸¢", 
-    J   => "æ¥æ¬èª", 
-    CHS => "æ±è¯­ç®åå­", 
-    CH  => "æ¼¢èªç¹é«å­", 
-    KO  => "íêµ­ì´", 
+    AP  => 'Aymara', 
+    B   => 'čeština', 
+    D   => 'Dansk', 
+    X   => 'Deutsch', 
+    ST  => 'eesti', 
+    E   => 'English', 
+    S   => 'español', 
+    F   => 'Français', 
+    C   => 'hrvatski', 
+    YW  => 'Ikinyarwanda', 
+    IN  => 'Indonesia', 
+    I   => 'italiano', 
+    SW  => 'Kiswahili', 
+    LT  => 'Latviešu', 
+    L   => 'lietuvių', 
+    H   => 'magyar', 
+    MG  => 'Malagasy', 
+    MT  => 'Malti', 
+    O   => 'Nederlands', 
+    N   => 'Norsk', 
+    PA  => 'Papiamentu (Kòrsou)', 
+    P   => 'polski', 
+    T   => 'Português', 
+    QUB => 'Quechua (Bolivia)', 
+    M   => 'Română', 
+    AL  => 'shqip', 
+    V   => 'slovenčina', 
+    SV  => 'slovenščina', 
+    FI  => 'Suomi', 
+    Z   => 'Svenska', 
+    TK  => 'Türkçe', 
+    G   => 'Ελληνική', 
+    BL  => 'български', 
+    U   => 'русский', 
+    SB  => 'српски', 
+    K   => 'українська', 
+    GE  => 'ქართული', 
+    REA => 'Հայերեն', 
+    TL  => 'à®¤à®®à®¿à®´à¯', 
+    MY  => 'à´®à´²à´¯à´¾à´³à´', 
+    SI  => 'à¹à¸à¸¢', 
+    J   => 'æ¥æ¬èª', 
+    CHS => 'æ±è¯­ç®åå­', 
+    CH  => 'æ¼¢èªç¹é«å­', 
+    KO  => '한국어', 
 );
 
 
+# some important functions
 BEGIN {
     #
     # Print messages with Gtk2::Notify, to syslog, and to STDOUT
@@ -177,15 +169,12 @@ BEGIN {
         $gtk = 1;  
     };
 
+    my $syslog;
+
     sub notify {
         if ( $gtk ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
         }
-
-        # syslog
-        openlog $APP_NAME, 'ndelay,pid', 'local0';
-        syslog 'info', @_;
-        closelog;
 
         print @_, "\n"
     }
@@ -194,22 +183,55 @@ BEGIN {
     #
     # Error Reporting
     #
-
     sub notify_fatal {
         if ( $gtk ) {
             Gtk2::Notify->new($APP_NAME . ' says:', join('', @_))->show;
         }
 
-        # syslog
-        openlog $APP_NAME, 'ndelay,pid', 'local0';
-        syslog 'ERR', @_;
-        closelog;
-
         print STDERR @_, "\n";
         exit 1;
     }
+
+    #
+    # Consise, cross-platform path building
+    #
+    sub path { File::Spec->join(@_) }
+
+    # replace but don't destory
+    sub replace($$$) {
+        my ($str, $pat, $replace) = @_;
+
+        $str =~ s/$pat/$replace/;
+
+        $str;
+    }
+
+    # replace but don't destory
+    sub greplace($$$) {
+        my ($str, $pat, $replace) = @_;
+
+        $str =~ s/$pat/$replace/g;
+
+        $str;
+    }
 }
 
+#
+# Constants
+#
+use constant HOME        => $^O =~ /win32/i ? "$ENV{HOMEDRIVE}\\$ENV{HOMEPATH}" : $ENV{HOME};
+use constant CONFIG_FILE => path(HOME, '.magbot');
+use constant DEFAULTS    => {
+    mags => {
+        w  => { E => [qw{ EPUB M4B }] },
+        wp => { E => [qw{ EPUB M4B }] },
+        g  => { E => [qw{ EPUB M4B }] }
+    },
+    dir => {
+        audio  => path(HOME, 'Podcasts'),
+        pub    => path(HOME, 'Reading')
+    }
+};
 
 #
 # Functions for accessing configuration
@@ -303,7 +325,7 @@ sub getstore {
     my ($url, $file) = @_;
 
     my $content = get($url); # allows to die before writing file
-    open my $fh, '>', $file or die "can't write to $file";
+    open my $fh, '>', $file or die "can't write to $file: $!";
     print $fh $content;
 }
 
@@ -396,7 +418,10 @@ sub parse_feed {
 sub feed_dir {
     my $feed = shift;
 
-    $feed->{dir} //= root_dir($feed) . '/' . $feed->{title};
+    $feed->{dir} //= do {
+        my $dir = greplace $feed->{title}, qr/(?:JW: )|[:\(\)]/ => '';
+        path(root_dir($feed) => $dir);
+    };
 
     $feed->{dir};
 }
@@ -423,14 +448,16 @@ sub root_dir {
 
 sub issue_dir {
     my ($item, $feed_dir) = @_;
-    $feed_dir . '/' . $item->{date};
+
+    my $dir = greplace $item->{date}, qr/( \d{2}:\d{2}:\d{2} \w{3})|[,:]/ => '';
+    path($feed_dir => $dir);
 }
 
 sub item_dir {
     my ($item) = @_;
-    my $issue_dir = issue_dir $item, feed_dir($item->{feed});
+    my $issue_dir = issue_dir $item => feed_dir($item->{feed});
 
-    $item->{dir} //= $issue_dir . '/' . item_file($item);
+    $item->{dir} //= path($issue_dir => item_file($item));
 
     $item->{dir}
 }
@@ -743,3 +770,5 @@ if ( __FILE__ eq $0 ) {
 }
 
 1;
+
+# vim: set ft=perl, set encoding=utf-8
