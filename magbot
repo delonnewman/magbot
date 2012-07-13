@@ -52,6 +52,7 @@ Delon Newman <delon.newman@gmail.com>
 =cut
 
 use threads;
+use Thread::Queue;
 
 use YAML;
 use HTTP::Tiny;
@@ -510,31 +511,43 @@ sub item_file  {
 # Top-Level Functions
 #
 
-use Thread::Queue;
-sub download_feeds($$) {
-    my ($urls, $fn) = @_;
+sub doeach($$) {
+    my ($urls, $fn, @args) = @_;
+
+    sub download($$@) {
+        threads->create(sub {
+            my ($url, $fn, @args) = @_;
+            $fn->($url, @args);
+    	threads->exit;
+        }, @_);
+    }
 
     sub worker {
-        my ($fn, $q, $n) = @_;
+        my ($fn, $q, @args) = @_;
 
         my $kid;
         while ( my $url = $q->dequeue ) {
-            $kid = threads->create(\&worker, $fn, $q, $n);
-            $fn->(get $url);
+            $kid = download $url => $fn, @args;
             last if !$kid;
         }
 
-        if ( $kid ) {
-            say "exiting worker";
-            $kid->detach;
-            threads->exit;
-        }
-
+	if ( threads->list > 1 ) {
+            my @threads = threads->list;
+	    for my $t (@threads) {
+		if ( $t->tid == threads->tid ) { next }
+	        if ( $t->is_running ) { $t->join }
+		else                  { $t->detach }
+            }
+	}
     }
 
-    my $q = Thread::Queue->new(@$urls, undef);
-    worker($fn, $q, int(@$urls));
-    say "exited worker";
+    if ( @$urls > 1 ) {
+        my $q = Thread::Queue->new(@$urls, undef);
+        worker($fn, $q, @args);
+    }
+    else {
+        download($urls->[0] => $fn, @args)->join;
+    }
 }
 
 sub find_new {
@@ -560,9 +573,10 @@ sub has_items {
 sub get_new_items($$) {
     my ($urls, $fn)  = @_;
 
-    download_feeds $urls => sub {
-        my ($content) = @_;
-        my $feed = parse_feed($content);
+    doeach $urls => sub {
+	my ($url)   = @_;
+	my $content = get $url;
+        my $feed    = parse_feed($content);
         if ( has_items $feed ) {
             my @items = find_new $feed;
             $fn->($feed->{mag}, @items);
@@ -571,14 +585,16 @@ sub get_new_items($$) {
 }
 
 sub download_media {
-    my @urls    = @_;
+    my @urls = @_;
     my @threads = get_new_items [@urls] => sub {
         my ($mag, @items) = @_;
-        notify_fatal "There's nothing new for: ", report_mags($mag) if @items == 0;
+
+        notify_fatal "There's nothing new for:\n", report_mags($mag) if @items == 0;
     
         notify "Downloading ", int(@items), " items...\n";
         
-        for my $item (@items) {
+       	doeach [@items] => sub {
+	    my ($item) = @_;
             my $root_dir = root_dir $item->{format};
             mkdir $root_dir unless -e $root_dir;
     
@@ -590,15 +606,14 @@ sub download_media {
     
             my $path = item_dir $item;
             if ( $item->{link} ) {
-                print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
-    
                 getstore($item->{link}, $path) unless -e $path;
+                print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
                 print "  ok.\n\n";
             }
-        }
-        
-        notify "Okay the work is complete! ;-)";
+        };
     };
+    
+    notify "Okay the work is complete! ;-)";
 }
 
 # Yaay!! Gen them URLs
@@ -762,9 +777,8 @@ sub main {
     daemonize_or_run $daemonize => sub {
         if ( @args < 4 ) {
             my @mags = get_mags(@args);
-            my $rpt  = report_mags(@mags);
 
-            notify "Checking for new items and downloading:\n", $rpt, "\n";
+            notify "Checking for new items and downloading...";
             download_media gen_urls(@mags);
         }
         else {
@@ -854,10 +868,10 @@ if ( __FILE__ eq $0 ) {
     GetOptions(
         'daemonize|d' => sub { $daemonize = 1 }, # run daily
         'help|h'      => sub { help() },
-        'check|c'     => sub { check($daemonize, @ARGV) }
+        'check|c'     => sub { check($daemonize, @ARGV); exit 0 }
     );
 
-    #main($daemonize, @ARGV);
+    main($daemonize, @ARGV);
 }
 
 1;
