@@ -44,8 +44,6 @@ Gtk notifications, to standard output, and to Syslog.
     XML::LibXML
     Gtk2::Notify (optional)
     HTTP::Tiny
-    AnyEvent
-    AnyEvent::HTTP
 
 =head1 AUTHOR
 
@@ -62,15 +60,11 @@ use Data::Dump qw{ dump };
 use File::Spec;
 use File::Basename;
 
-use AnyEvent;
-use AnyEvent::HTTP;
-
-
 #
 # Settings
 #
 
-my $VERSION   = '0.6.2';
+my $VERSION   = '0.6.3';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
 my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
@@ -300,9 +294,6 @@ sub read_config {
 # Some monkey business for IO
 #
 
-# TODO: Use AnyEvent::HTTP to get and store from HTTP asyncronosly.
-# see: https://metacpan.org/module/AnyEvent::HTTP#HTTP-1.1-FILE-DOWNLOAD
-
 # get content from HTTP
 sub get {
     my $res = eval { HTTP::Tiny->new->get(@_) };
@@ -338,8 +329,8 @@ sub Feed {
     my %feed = @_;
     
     $feed{title} // die "title is required";
-    $feed{url}   // die "date is required";
-    $feed{items} // die "feed is required";
+    $feed{url}   // die "url is required";
+    $feed{items} // notify_fatal "Didn't find any items in feed";
 
     bless \%feed, 'Feed';
 }
@@ -504,12 +495,44 @@ sub item_file  {
 # Top-Level Functions
 #
 
-sub download_feeds { map { get $_ } @_ }
+use threads;
+sub download_feeds($$) {
+    my ($urls, $fn) = @_;
+
+    my @threads = map {
+        my $t = threads->create(sub {
+            threads->detach;
+            dump $_;
+            $fn->(get $_);
+            thread->exit;
+        });
+
+        if ( my $err = $t->error ) {
+            warn "Thread error: $err\n";
+        }
+
+        $t;
+    } @$urls;
+
+    my $watcher = thread->create(sub {
+        for my $t ( thread->list ) {
+            sleep 1;
+            if ( $t->is_running ) {
+                $t->join if thread->list == 1;
+            }
+        }
+        thread->exit;
+    });
+}
 
 sub find_new {
     map  {  $_->[1] }
     grep { !$_->[0] }
-    map  { map { [ -e item_dir($_), $_ ]  } @{$_->{items}} } @_;
+    map  {
+        map {
+            [ -e item_dir($_), $_ ]
+        } @{$_->{items}}
+    } @_;
 }
 
 sub has_items {
@@ -522,41 +545,48 @@ sub has_items {
     }
 }
 
-sub get_new_items {
-    my @urls  = @_;
-    my @items = find_new grep has_items($_), map parse_feed($_), download_feeds @urls;
+sub get_new_items($$) {
+    my ($urls, $fn)  = @_;
 
-    wantarray ? @items : \@items;
+    download_feeds $urls => sub {
+        my ($content) = @_;
+        my $feed = parse_feed($content);
+        if ( has_items $feed ) {
+            my @items = find_new $feed;
+            $fn->(@items);
+        }
+    };
 }
 
 sub download_media {
-    my @urls  = @_;
-    my @items = get_new_items @urls;
-
-    notify_fatal "There's nothing new in your feeds." if @items == 0;
-
-    notify "Downloading ", int(@items), " items...\n";
+    my @urls    = @_;
+    my @threads = get_new_items [@urls] => sub {
+        my @items = @_;
+        notify_fatal "There's nothing new in your feeds." if @items == 0;
     
-    for my $item (@items) {
-        my $root_dir = root_dir $item->{format};
-        mkdir $root_dir unless -e $root_dir;
-
-        my $feed_dir = feed_dir $item->{feed};
-        mkdir $feed_dir unless -e $feed_dir;
-
-        my $issue_dir = issue_dir $item, $feed_dir;
-        mkdir $issue_dir unless -e $issue_dir;
-
-        my $path = item_dir $item;
-        if ( $item->{link} ) {
-            print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
-
-            getstore($item->{link}, $path) unless -e $path;
-            print "  ok.\n\n";
+        notify "Downloading ", int(@items), " items...\n";
+        
+        for my $item (@items) {
+            my $root_dir = root_dir $item->{format};
+            mkdir $root_dir unless -e $root_dir;
+    
+            my $feed_dir = feed_dir $item->{feed};
+            mkdir $feed_dir unless -e $feed_dir;
+    
+            my $issue_dir = issue_dir $item, $feed_dir;
+            mkdir $issue_dir unless -e $issue_dir;
+    
+            my $path = item_dir $item;
+            if ( $item->{link} ) {
+                print "  downloading '", $item->{title}, "' to \n  --> ", $path, "\n";
+    
+                getstore($item->{link}, $path) unless -e $path;
+                print "  ok.\n\n";
+            }
         }
-    }
-    
-    notify "Okay the work is complete! ;-)";
+        
+        notify "Okay the work is complete! ;-)";
+    };
 }
 
 # Yaay!! Gen them URLs
@@ -625,7 +655,6 @@ sub gen_file_url {
 sub magmap($$) {
     my ($mags, $fn) = @_;
     my @mags = keys %$mags;
-    
     map {
         my $mag   = $_;
         my @langs = keys %{$mags->{$mag}};
@@ -648,18 +677,14 @@ sub magmap($$) {
 sub Mag {
     my ($mag, $lang, $format, $date) = @_;
 
-    my @formats = keys %FORMATS;
-    my @langs   = keys %LANGUAGES;
-    my @mags    = keys %MAGS;
-
     $mag // die "mag code is required";
-    die "'$mag' is an invalid magazine"  unless grep $_ eq $mag, @mags;
+    die "'$mag' is an invalid magazine" unless $MAGS{$mag};
 
     $lang // die "lang is required";
-    die "'$lang' is an invalid language" unless grep $_ eq $lang, @langs;
+    die "'$lang' is an invalid language" unless $LANGUAGES{$lang};
 
     $format // die "foramat is required";
-    die "'$format' is an invalid format" unless grep $_ eq $format, @formats;
+    die "'$format' is an invalid format" unless $FORMATS{$format};
 
     bless { mag    => $mag, 
             lang   => $lang,
@@ -707,9 +732,9 @@ sub daemonize_or_run($$) {
 
     if ( $cond ) {
         my $int = config_or_defaults('check-interval');
-        AE::timer 0, $int => sub {
+        #AE::timer 0, $int => sub {
             $fn->();
-        };
+        #};
     }
     else { $fn->() }
 }
@@ -760,15 +785,17 @@ sub check {
     notify "Checking for new items:\n", $rpt, "\n";
 
     daemonize_or_run $daemonize => sub {
-        my @items = get_new_items(gen_urls @mags);
-        if ( @items ) {
-            notify "New items:\n", join "\n", map { "  " . $_->{title} } @items;
-            exit 0;
-        }
-        else {
-            notify 'No new items found.';
-            exit 1;
-        }
+        get_new_items [gen_urls @mags] => sub {
+            my @items = @_;
+            if ( @items ) {
+                notify "New items:\n", join "\n", map { "  " . $_->{title} } @items;
+                exit 0;
+            }
+            else {
+                notify 'No new items found.';
+                exit 1;
+            }
+        };
     };
 }
 
