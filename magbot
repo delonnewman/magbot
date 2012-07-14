@@ -518,7 +518,7 @@ sub doeach($$) {
         threads->create(sub {
             my ($url, $fn, @args) = @_;
             $fn->($url, @args);
-    	    threads->exit;
+            threads->exit;
         }, @_);
     }
 
@@ -530,16 +530,16 @@ sub doeach($$) {
             last if !$kid;
         }
 
-	    if ( threads->list > 1 ) {
+        if ( threads->list > 1 ) {
             my @threads = threads->list;
-	        for my $t (threads->list) {
-		        next if  $t->tid == threads->tid;
-		        next if  $t->is_detached;
+            for my $t (threads->list) {
+                next if  $t->tid == threads->tid;
+                next if  $t->is_detached;
 
-		        eval { $t->join };
-		        if ( $@ ) { &log($@) }
+                eval { $t->join };
+                if ( $@ ) { &log($@) }
             }
-	    }
+        }
     }
 
     if ( @$urls > 1 ) {
@@ -575,8 +575,8 @@ sub get_new_items($$) {
     my ($urls, $fn)  = @_;
 
     doeach $urls => sub {
-	my ($url)   = @_;
-	my $content = get $url;
+    my ($url)   = @_;
+    my $content = get $url;
         my $feed    = parse_feed($content);
         if ( has_items $feed ) {
             my @items = find_new $feed;
@@ -600,8 +600,8 @@ sub download_media {
                    int(@items), " items found, downloading...\n";
         }
         
-       	doeach [@items] => sub {
-	        my ($item) = @_;
+           doeach [@items] => sub {
+            my ($item) = @_;
             my $root_dir = root_dir $item->{format};
             mkdir $root_dir unless -e $root_dir;
     
