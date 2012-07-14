@@ -600,7 +600,7 @@ sub download_media {
                    int(@items), " items found, downloading...\n";
         }
         
-           doeach [@items] => sub {
+        doeach [@items] => sub {
             my ($item) = @_;
             my $root_dir = root_dir $item->{format};
             mkdir $root_dir unless -e $root_dir;
