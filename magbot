@@ -67,7 +67,7 @@ use File::Basename;
 # Settings
 #
 
-my $VERSION   = '0.6.3';
+my $VERSION   = '0.7.0';
 my $APP_NAME  = 'MagBot';
 my $ROOT_URL  = 'http://www.jw.org/index.xjp';
 my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
@@ -530,20 +530,16 @@ sub doeach($$) {
             last if !$kid;
         }
 
-	if ( threads->list > 1 ) {
+	    if ( threads->list > 1 ) {
             my @threads = threads->list;
-	    for my $t (threads->list) {
-		next if  $t->tid == threads->tid;
-		next if  $t->is_detached;
+	        for my $t (threads->list) {
+		        next if  $t->tid == threads->tid;
+		        next if  $t->is_detached;
 
-		eval {
-		    $t->join;
-		};
-		if ( $@ ) {
-		    &log($@);
-		}
+		        eval { $t->join };
+		        if ( $@ ) { &log($@) }
             }
-	}
+	    }
     }
 
     if ( @$urls > 1 ) {
@@ -834,6 +830,12 @@ sub check {
     };
 }
 
+sub list {
+    say "I'm currently configured to watch";
+    say report_mags(mags_from_config($MAGS));
+    exit 0;
+}
+
 sub help {
     print <<HELP;
 $APP_NAME $VERSION
@@ -845,6 +847,10 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
         check for new feed items as sepecified by arguments
         or if none are present by configuration in
         $ENV{HOME}/.magbot, report and exit
+
+    --list, -l
+        list mags that are set to be downloaded in
+        configuration file
 
     --daemonize, -d
         run as a backgroud process daily
@@ -878,7 +884,8 @@ if ( __FILE__ eq $0 ) {
     GetOptions(
         'daemonize|d' => sub { $daemonize = 1 }, # run daily
         'help|h'      => sub { help() },
-        'check|c'     => sub { check($daemonize, @ARGV); exit 0 }
+        'check|c'     => sub { check($daemonize, @ARGV); exit 0 },
+        'list|l'      => sub { list() }
     );
 
     main($daemonize, @ARGV);
