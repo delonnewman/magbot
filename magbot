@@ -73,6 +73,7 @@ my $ROOT_URL  = 'http://www.jw.org/index.xjp';
 my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
 my $MAGS      = config_or_defaults('mags');
 my $DIR       = config_or_defaults('dir');
+my $VERBOSE   = 0;
 
 # Valid mags, languages, formats
 my %MAGS = (
@@ -102,6 +103,10 @@ my %FORMATS_EXTENSIONS = (
     AAC  => 'm4b',
     EPUB => 'epub',
     PDF  => 'pdf'
+);
+
+my %FORMAT_EQUIVALENTS = (
+	AAC => 'M4B'
 );
 
 my %LANGUAGES = (
@@ -213,6 +218,10 @@ BEGIN {
         $str;
     }
 
+	sub fatal($) {
+		print STDERR @_, "\n";
+		threads->exit;
+	}
 }
 
 #
@@ -236,7 +245,7 @@ use constant DEFAULTS    => {
 sub log {
     open my $l, '>>', LOG_FILE or
         die "Can't append to file ", LOG_FILE, ": $!";
-    say @_;
+    say @_ if $VERBOSE;
     say $l @_;
 }
 
@@ -533,8 +542,8 @@ sub doeach($$) {
         if ( threads->list > 1 ) {
             my @threads = threads->list;
             for my $t (threads->list) {
-                next if  $t->tid == threads->tid;
-                next if  $t->is_detached;
+                next if $t->tid == threads->tid;
+                next if $t->is_detached;
 
                 eval { $t->join };
                 if ( $@ ) { &log($@) }
@@ -635,6 +644,8 @@ sub gen_urls {
 
         my $type = $FORMATS{$format};
 
+		$format = $FORMAT_EQUIVALENTS{$format} if $FORMAT_EQUIVALENTS{$format};
+
         "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
     } @mags;
 }
@@ -710,14 +721,14 @@ sub magmap($$) {
 sub Mag {
     my ($mag, $lang, $format, $date) = @_;
 
-    $mag // die "mag code is required";
-    die "'$mag' is an invalid magazine" unless $MAGS{$mag};
+    $mag // fatal "magazine code is required";
+    fatal "'$mag' is an invalid magazine" unless $MAGS{$mag};
 
-    $lang // die "lang is required";
-    die "'$lang' is an invalid language" unless $LANGUAGES{$lang};
+    $lang // fatal "language is required";
+    fatal "'$lang' is an invalid language" unless $LANGUAGES{$lang};
 
-    $format // die "foramat is required";
-    die "'$format' is an invalid format" unless $FORMATS{$format};
+    $format // fatal "format is required";
+    fatal "'$format' is an invalid format" unless $FORMATS{$format};
 
     bless { mag    => $mag, 
             lang   => $lang,
@@ -725,30 +736,18 @@ sub Mag {
             date   => $date }, 'Mag';
 }
 
-sub mags_from_config {
-    my ($config) = @_;
-    
-    magmap $config => sub { Mag(@_) };
-}
-
-# convert args '($mag, $lang, $format)' into valid
-# mag data structure that eval_mags expects, namely:
-# '{ $mag => { $lang => [ $formats ] }'
-sub mags_from_args {
-    if ( @_ < 3 ) { undef }
-    else          { (Mag(@_)) }
-}
-
 sub get_mags {
     my @args = @_;
 
     if ( @args ) {
-        if ( !(my @mags = mags_from_args(@args)) ) {
+        if ( !(my @mags = Mag(@args)) ) {
             notify_fatal "Need to specify magazine, language, and format to download.";
         }
         else { @mags }
     }
-    else { mags_from_config($MAGS) }
+	else {
+		magmap $MAGS => sub { Mag(@_) };
+	}
 }
 
 sub report_mags {
@@ -852,6 +851,9 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
         list mags that are set to be downloaded in
         configuration file
 
+	--verbose, -v
+	    flag verbose mode
+
     --daemonize, -d
         run as a backgroud process daily
 
@@ -885,7 +887,8 @@ if ( __FILE__ eq $0 ) {
         'daemonize|d' => sub { $daemonize = 1 }, # run daily
         'help|h'      => sub { help() },
         'check|c'     => sub { check($daemonize, @ARGV); exit 0 },
-        'list|l'      => sub { list() }
+        'list|l'      => sub { list() },
+		'verbose|v'   => sub { $VERBOSE = 1 }
     );
 
     main($daemonize, @ARGV);
