@@ -74,6 +74,7 @@ my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
 my $MAGS      = config_or_defaults('mags');
 my $DIR       = config_or_defaults('dir');
 my $VERBOSE   = 0;
+my $HOME      = $ENV{HOME} || "$ENV{HOMEDRIVE}$ENV{HOMEPATH}";
 
 # Valid mags, languages, formats
 my %MAGS = (
@@ -836,7 +837,7 @@ sub list {
 }
 
 sub help {
-    print <<HELP;
+    say qq{
 $APP_NAME $VERSION
 
 Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
@@ -845,16 +846,16 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
     --check, -c
         check for new feed items as sepecified by arguments
         or if none are present by configuration in
-        $ENV{HOME}/.magbot, report and exit
+        $HOME/.magbot, report and exit
 
     --list, -l
         list mags that are set to be downloaded in
         configuration file
 
-	--verbose, -v
-	    flag verbose mode
+    --verbose, -v
+        flag verbose mode
 
-    --daemonize, -d
+    --daemonize, -d (not working)
         run as a backgroud process daily
 
     --help, -h
@@ -873,8 +874,7 @@ Usage: $0 [OPTIONS] [MAG CODE] [LANGUAGE CODE] [FORMAT]
     FORMAT:
         Used to indicate which file format to download the
         magazine in.  Valid values are 'MP3', 'M4B', 'AAC',
-        'EPUB', and 'PDF'.
-HELP
+        'EPUB', and 'PDF'.\n};
 
     exit 0;
 }
