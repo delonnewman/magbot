@@ -107,7 +107,7 @@ my %FORMATS_EXTENSIONS = (
 );
 
 my %FORMAT_EQUIVALENTS = (
-	AAC => 'M4B'
+    AAC => 'M4B'
 );
 
 my %LANGUAGES = (
@@ -219,10 +219,10 @@ BEGIN {
         $str;
     }
 
-	sub fatal($) {
-		print STDERR @_, "\n";
-		threads->exit;
-	}
+    sub fatal($) {
+        print STDERR @_, "\n";
+        threads->exit;
+    }
 }
 
 #
@@ -645,7 +645,7 @@ sub gen_urls {
 
         my $type = $FORMATS{$format};
 
-		$format = $FORMAT_EQUIVALENTS{$format} if $FORMAT_EQUIVALENTS{$format};
+        $format = $FORMAT_EQUIVALENTS{$format} if $FORMAT_EQUIVALENTS{$format};
 
         "$ROOT_URL?option=$types{$type}&rln=$lang&rmn=$mag&rfm=$format";
     } @mags;
@@ -746,9 +746,9 @@ sub get_mags {
         }
         else { @mags }
     }
-	else {
-		magmap $MAGS => sub { Mag(@_) };
-	}
+    else {
+        magmap $MAGS => sub { Mag(@_) };
+    }
 }
 
 sub report_mags {
@@ -888,7 +888,7 @@ if ( __FILE__ eq $0 ) {
         'help|h'      => sub { help() },
         'check|c'     => sub { check($daemonize, @ARGV); exit 0 },
         'list|l'      => sub { list() },
-		'verbose|v'   => sub { $VERBOSE = 1 }
+        'verbose|v'   => sub { $VERBOSE = 1 }
     );
 
     main($daemonize, @ARGV);
