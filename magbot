@@ -69,7 +69,7 @@ use File::Basename;
 
 my $VERSION   = '0.7.0';
 my $APP_NAME  = 'MagBot';
-my $ROOT_URL  = 'http://www.jw.org/index.xjp';
+my $ROOT_URL  = 'http://www.jw.org/apps/index.xjp';
 my $FILE_URL  = 'http://download.jw.org/files/media_magazines';
 my $MAGS      = config_or_defaults('mags');
 my $DIR       = config_or_defaults('dir');
