@@ -2,12 +2,13 @@
 
 # files
 BIN=magbot
+SRC=magbot.perl
 MAN=$(BIN).1
 SCRIPT=nook-script
 RULE=10-nook.rules
+PP=$(shell which pp)
 
 # dirs
-SDCARD=/media/7C4C-449E
 DIR=/usr/local/bin
 DOC=/usr/local/share/man/man1
 UDEV=/etc/udev/rules.d
@@ -15,25 +16,19 @@ UDEV=/etc/udev/rules.d
 # dependencies
 PKG_BIN=apt-get install
 CPAN_BIN=cpanm
-PERL_DEPS=HTTP::Tiny Gtk2::Notify AnyEvent AnyEvent::HTTP XML::LibXML
-SYS_DEPS=libgtk2-notify-perl
+PERL_DEPS=YAML HTTP::Tiny AnyEvent AnyEvent::HTTP XML::LibXML pp Pod::Markdown IO::Socket::SSL
 
+all: $(BIN) doc
 
-all: deploy
+$(BIN):
+	$(PP) -o $(BIN) $(SRC)
 
-deploy:
-	cp $(BIN) $(SDCARD)/sl4a/scripts/mbot.pl
-	cp -rf extlib/lib/perl5/* $(SDCARD)/com.googlecode.perlforandroid/extras/perl/site_perl
-
-install: install-deps
+install:
 	cp $(BIN) $(DIR)
 	cp $(MAN) $(DOC)
-	cp $(SCRIPT) $(DIR)
-	cp $(RULE) $(UDEV)
 
-install-deps:
-	#$(PKG_BIN) $(SYS_DEPS)
-	#$(CPAN_BIN) $(PERL_DEPS)
+deps:
+	$(CPAN_BIN) $(PERL_DEPS)
 
 uninstall:
 	rm $(DIR)/$(BIN)
@@ -41,14 +36,17 @@ uninstall:
 	rm $(DIR)/$(SCRIPT)
 	rm $(UDEV)/$(RULE)
 
-doc: clean_doc README $(BIN).1
+doc: README.md $(BIN).1
 
 clean_doc:
-	rm README # force update
+	rm README.md # force update
 	rm $(BIN).1 # force update
 
-README:
-	pod2text $(BIN) > README
+clean: clean_doc
+	rm $(BIN)
+
+README.md:
+	pod2markdown $(SRC) > README.md
 
 $(BIN).1:
-	pod2man -c MagBot $(BIN) > $(BIN).1
+	pod2man -c MagBot $(SRC) > $(BIN).1

@@ -1,1 +1,0 @@
-ACTION=="add", ATTRS{idVendor}=="2080", ATTRS{idProduct}=="0003", RUN+="/usr/local/bin/nook-script"

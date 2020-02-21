@@ -47,12 +47,9 @@ Gtk notifications, to standard output, and to Syslog.
 
 =head1 AUTHOR
 
-Delon Newman <delon.newman@gmail.com>
+Delon Newman <contact@delonewman.name>
 
 =cut
-
-use threads;
-use Thread::Queue;
 
 use YAML;
 use HTTP::Tiny;
@@ -192,8 +189,6 @@ BEGIN {
         }
 
         print STDERR @_, "\n";
-
-        threads->exit;
     }
 
     #
@@ -221,7 +216,6 @@ BEGIN {
 
     sub fatal($) {
         print STDERR @_, "\n";
-        threads->exit;
     }
 }
 
@@ -525,11 +519,8 @@ sub doeach($$) {
     my ($urls, $fn, @args) = @_;
 
     sub download($$@) {
-        threads->create(sub {
-            my ($url, $fn, @args) = @_;
-            $fn->($url, @args);
-            threads->exit;
-        }, @_);
+        my ($url, $fn, @args) = @_;
+        $fn->($url, @args);
     }
 
     sub worker {
@@ -552,13 +543,13 @@ sub doeach($$) {
         }
     }
 
-    if ( @$urls > 1 ) {
-        my $q = Thread::Queue->new(@$urls, undef);
-        worker($fn, $q, @args);
-    }
-    else {
-        download($urls->[0] => $fn, @args)->join;
-    }
+    #if ( @$urls > 1 ) {
+    #    my $q = Thread::Queue->new(@$urls, undef);
+    #    worker($fn, $q, @args);
+    #}
+    #else {
+        download($urls->[0] => $fn, @args); #->join;
+        #}
 }
 
 sub find_new {
