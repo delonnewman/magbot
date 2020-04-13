@@ -16,7 +16,6 @@ UDEV=/etc/udev/rules.d
 # dependencies
 PKG_BIN=apt-get install
 CPAN_BIN=cpanm
-PERL_DEPS=YAML HTTP::Tiny AnyEvent AnyEvent::HTTP XML::LibXML pp Pod::Markdown IO::Socket::SSL
 
 all: $(BIN) doc
 
