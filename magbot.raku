@@ -1,10 +1,7 @@
-#!/usr/bin/env perl6
-
+#!/usr/bin/env raku
 use v6;
 
 unit package MagBot;
-
-#binmode STDOUT, ':utf8';
 
 =begin pod
 
@@ -324,7 +321,7 @@ class Mag {
 
   method BEGIN {
     die "'$.code' is an invalid magazine" unless %MAGS{$.code};
-    die "'$.lang' is an invalid laguage" unless %LANGUAGES{$.lang};
+    die "'$.lang' is an invalid laguage"  unless %LANGUAGES{$.lang};
     die "'$.format' is an invalid format" unless %FORMATS{$.format};
   }
 }
